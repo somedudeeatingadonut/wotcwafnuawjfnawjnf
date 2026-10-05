@@ -2623,6 +2623,29 @@ const PanoramaViewer = {
             this.sphere.material.needsUpdate = true;
             this.lon = 180; // Reset to center of texture (away from seam)
             this.lat = 0;
+        }, undefined, (err) => {
+            // Remote texture failed (rate limit / CORS / offline). Fall back to
+            // the built-in procedural renderer so the panorama never stays black.
+            console.warn('[panorama] texture failed to load, using procedural fallback:', err && (err.message || err));
+            try {
+                let fallbackPrompt = 'cinematic game scene, atmospheric';
+                if (typeof url === 'string' && url.indexOf('image.pollinations.ai/prompt/') !== -1) {
+                    const m = url.match(/\/prompt\/([^?]+)/);
+                    if (m) fallbackPrompt = decodeURIComponent(m[1]);
+                }
+                const fb = window.__wsShimInternals && window.__wsShimInternals.proceduralImage
+                    ? window.__wsShimInternals.proceduralImage(fallbackPrompt, { w: 1536, h: 768, explicit: true })
+                    : null;
+                if (fb && fb !== url) {
+                    this.loadTexture(fb);
+                } else if (!fb) {
+                    this.hide();
+                    currentSceneImage.src = url;
+                    currentSceneImage.classList.remove('hidden');
+                }
+            } catch (e) {
+                console.warn('[panorama] procedural fallback failed:', e);
+            }
         });
     },
 
@@ -3997,14 +4020,17 @@ async function handlePlayerAction(displayActionText, aiContextActionText, clearP
 
             let originalImageURL = '';
             if (imagePrompt && imagePrompt.trim() !== '') {
+                // priority: scene images wait for a free API throttle slot (icons/thumbnails don't)
                 const imageGenPromise = websim.imageGen(panoramicMode ? {
                     prompt: imagePrompt,
                     // Higher resolution for 360° panoramas to improve visual fidelity
                     width: 4096,
                     height: 2048,
+                    priority: true,
                 } : {
                     prompt: imagePrompt,
                     aspect_ratio: "16:9",
+                    priority: true,
                 });
 
                 const imageTimeoutPromise = new Promise((resolve, reject) => {

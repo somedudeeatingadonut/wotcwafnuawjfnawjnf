@@ -630,12 +630,12 @@
         'https://text.pollinations.ai/'
     ];
 
-    function remoteTextAttempt(url, body, signal) {
+    function remoteTextAttempt(url, body, signal, ms) {
         return fetchTimeout(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: body
-        }, 16000, signal).then(function (res) {
+        }, ms || 14000, signal).then(function (res) {
             if (!res.ok) {
                 var e = new Error('HTTP ' + res.status);
                 e.httpStatus = res.status;
@@ -672,6 +672,58 @@
         });
     }
 
+    function buildGetPrompt(messages) {
+        var sys = '', user = '';
+        var list = messages || [];
+        for (var i = 0; i < list.length; i++) {
+            var m = list[i] || {};
+            if (!sys && m.role === 'system' && m.content) sys = String(m.content);
+            if (m.role === 'user' && m.content) user = String(m.content);
+        }
+        if (!user) {
+            for (var j = list.length - 1; j >= 0; j--) {
+                if (list[j] && list[j].role !== 'system' && list[j].content) { user = String(list[j].content); break; }
+            }
+        }
+        function cut(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n) + ' [...]' : s; }
+        var out = '';
+        if (sys) out += '[SYSTEM]\n' + cut(sys, 2400) + '\n\n';
+        if (user) out += '[USER]\n' + cut(user, 1500);
+        return out.trim();
+    }
+
+    /**
+     * Legacy GET endpoint — verified working without any key. Used as the
+     * primary fallback when the OpenAI-compatible POST endpoints reject or
+     * hang. Context is condensed to fit URL limits.
+     */
+    function remoteTextGet(messages, opts, wantsJson) {
+        var prompt = buildGetPrompt(messages);
+        if (wantsJson) prompt += '\n\nRespond with ONLY valid JSON. No markdown fences, no commentary.';
+        var url = 'https://text.pollinations.ai/' + encodeURIComponent(prompt) +
+            '?referrer=ai-world-maker-standalone' + (wantsJson ? '&json=true' : '');
+        return fetchTimeout(url, { method: 'GET' }, 14000, opts && opts.signal).then(function (res) {
+            if (!res.ok) {
+                var e = new Error('HTTP ' + res.status);
+                e.httpStatus = res.status;
+                throw e;
+            }
+            var ct = String(res.headers.get('content-type') || '');
+            if (ct.indexOf('text/html') !== -1) throw new Error('Unexpected HTML response');
+            return res.text();
+        }).then(function (text) {
+            if (!text || !text.trim()) throw new Error('Empty completion');
+            if (text.trim().charAt(0) === '<') throw new Error('Unexpected HTML response');
+            return text;
+        });
+    }
+
+    function notePostFailure() {
+        // POST endpoints have been unreliable — after any failure prefer the
+        // verified GET endpoint first for the next few minutes.
+        SHIM.postSuspectUntil = Date.now() + 300000;
+    }
+
     function tryRemoteText(messages, opts) {
         if (SHIM.textMode === 'offline' && Date.now() < SHIM.textRetryAt) {
             return Promise.resolve(null);
@@ -688,15 +740,33 @@
             return Promise.resolve(null);
         }
         var signal = opts ? opts.signal : null;
+        var wantsJson = !!(opts && opts.json);
 
-        var p = remoteTextAttempt(TEXT_ENDPOINTS[0], body, signal);
-        if (TEXT_ENDPOINTS[1]) {
-            p = p.catch(function (err) {
+        var postMain = function () {
+            return remoteTextAttempt(TEXT_ENDPOINTS[0], body, signal, 14000)
+                .catch(function (err) { notePostFailure(); throw err; });
+        };
+        var getLegacy = function () { return remoteTextGet(messages, opts, wantsJson); };
+        var postBare = function () {
+            return remoteTextAttempt(TEXT_ENDPOINTS[1], body, signal, 12000)
+                .catch(function (err) { notePostFailure(); throw err; });
+        };
+
+        var attempts = (Date.now() < (SHIM.postSuspectUntil || 0))
+            ? [getLegacy, postMain, postBare]
+            : [postMain, getLegacy, postBare];
+
+        function runAttempt(i) {
+            if (i >= attempts.length) {
+                return Promise.reject(new Error('All text endpoints failed'));
+            }
+            return Promise.resolve().then(attempts[i]).catch(function (err) {
                 if (err && err.name === 'AbortError') throw err;
-                return remoteTextAttempt(TEXT_ENDPOINTS[1], body, signal);
+                return runAttempt(i + 1);
             });
         }
-        return p.then(function (content) {
+
+        return runAttempt(0).then(function (content) {
             SHIM.textMode = 'remote';
             return content;
         }).catch(function (err) {
@@ -755,20 +825,22 @@
     }
 
     // Serialize remote image requests a little to stay under anonymous rate limits.
-    var imageChain = Promise.resolve();
-    function queueImageJob(job) {
-        var run = imageChain.then(function () {
-            return new Promise(function (res) { setTimeout(res, 600); });
-        }).then(job);
-        imageChain = run.then(function () {}, function () {});
-        return run;
-    }
+    // image.pollinations.ai anonymous tier is throttled (~1 request / 15 s).
+    // We reserve a slot before each attempt so back-to-back calls (world
+    // thumbnail -> first scene -> item icons) never collide with the limit.
+    var IMG_GAP_MS = 15000;
+    var imgSlotAt = 0; // earliest timestamp the next remote image request may start
+
+    function sleepMs(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
 
     function remoteImageUrl(prompt, dims, seed) {
         var w = dims.w, h = dims.h;
-        // Keep remote sizes within sane bounds for anonymous API use.
-        if (w > 2048 || h > 2048) {
-            var scale = 2048 / Math.max(w, h);
+        // Keep remote sizes within anonymous-tier-friendly bounds: larger
+        // requests (e.g. 4096x2048 panoramas) are slow and often rejected on
+        // the free tier, which is why scene generation used to fall back.
+        var maxDim = 1536;
+        if (w > maxDim || h > maxDim) {
+            var scale = maxDim / Math.max(w, h);
             w = Math.round(w * scale); h = Math.round(h * scale);
         }
         return 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) +
@@ -776,30 +848,140 @@
             '&seed=' + seed + '&nologo=true&referrer=ai-world-maker-standalone';
     }
 
-    function tryRemoteImage(prompt, dims) {
-        if (SHIM.imageMode === 'procedural' && Date.now() < SHIM.imageRetryAt) {
-            return Promise.resolve(null);
+    function classifyImageFailure(err) {
+        var status = err && err.httpStatus;
+        var now = Date.now();
+        if (status === 429 || status === 503) {
+            SHIM.imageMode = 'throttled';
+            imgSlotAt = Math.max(imgSlotAt, now + 16000);
+            return 'throttled';
         }
+        if (status === 401 || status === 402 || status === 403 || status === 404) {
+            SHIM.imageMode = 'down';
+            SHIM.imageRetryAt = now + 600000;
+            return 'down';
+        }
+        if (err && err.code === 'ETIMEDOUT') {
+            SHIM.imageMode = 'degraded';
+            imgSlotAt = Math.max(imgSlotAt, now + 16000);
+            return 'degraded';
+        }
+        // Network/CORS failure on fetch — remember so future attempts skip
+        // straight to the <img> probe strategy.
+        SHIM.fetchBlocked = true;
+        SHIM.fetchBlockedUntil = now + 300000;
+        SHIM.imageMode = 'degraded';
+        return 'degraded';
+    }
+
+    /** Decode a fetched blob into a compact data URL (<= ~96 KB string) so the
+     *  image renders instantly with zero extra network requests — a second
+     *  request within seconds would be rejected by the anonymous throttle,
+     *  which is exactly what made scene images disappear. */
+    function blobToCappedDataUrl(blob) {
+        return new Promise(function (resolve, reject) {
+            var objectUrl = null;
+            try { objectUrl = URL.createObjectURL(blob); } catch (e) { reject(e); return; }
+            var img = new Image();
+            img.onload = function () {
+                try {
+                    var w = img.naturalWidth || img.width;
+                    var h = img.naturalHeight || img.height;
+                    if (!w || !h) throw new Error('decoded image has no dimensions');
+                    var canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    var ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    resolve(encodeCapped(canvas));
+                } catch (e) {
+                    reject(e);
+                } finally {
+                    try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+                }
+            };
+            img.onerror = function () {
+                try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+                reject(new Error('failed to decode fetched image'));
+            };
+            img.src = objectUrl;
+        });
+    }
+
+    /** CORS-clean <img> load probe: works when connect-src restricts fetch()
+     *  but images are allowed. Returns true if the image is usable. */
+    function imageLoadTest(url, timeoutMs) {
+        return new Promise(function (resolve) {
+            var img = new Image();
+            var done = false;
+            function finish(ok) {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                try { img.onload = img.onerror = null; img.src = ''; } catch (e) {}
+                resolve(ok);
+            }
+            var timer = setTimeout(function () { finish(false); }, timeoutMs);
+            img.crossOrigin = 'anonymous';
+            img.onload = function () { finish(true); };
+            img.onerror = function () { finish(false); };
+            img.src = url;
+        });
+    }
+
+    function attemptRemoteImage(prompt, dims) {
         var seed = fnv1a(prompt) % 999999;
         var url = remoteImageUrl(prompt, dims, seed);
-        return fetchTimeout(url, {}, 40000, null).then(function (res) {
-            if (!res.ok) {
-                var e = new Error('HTTP ' + res.status);
-                e.httpStatus = res.status;
-                throw e;
+        var state = { throttled: false };
+
+        var fetchStep = Promise.resolve(null);
+        if (!(SHIM.fetchBlocked && Date.now() < (SHIM.fetchBlockedUntil || 0))) {
+            fetchStep = fetchTimeout(url, {}, 30000, null).then(function (res) {
+                if (!res.ok) {
+                    var e = new Error('HTTP ' + res.status);
+                    e.httpStatus = res.status;
+                    throw e;
+                }
+                var ct = String(res.headers.get('content-type') || '');
+                if (ct.indexOf('image') === -1) {
+                    var e2 = new Error('Non-image response (' + ct + ')');
+                    e2.httpStatus = res.status;
+                    throw e2;
+                }
+                return res.blob().then(function (blob) {
+                    if (!blob || !blob.size) throw new Error('Empty image');
+                    return blobToCappedDataUrl(blob);
+                });
+            }).then(function (dataUrl) {
+                return { url: dataUrl, via: 'fetch' };
+            }).catch(function (err) {
+                if (err && err.name === 'AbortError') throw err;
+                var cls = classifyImageFailure(err);
+                if (cls === 'throttled') state.throttled = true;
+                try { console.warn('[websim-shim] image fetch failed (' + (err && err.message) + '); trying img probe'); } catch (e) {}
+                return null;
+            });
+        }
+
+        return fetchStep.then(function (remote) {
+            if (remote) {
+                SHIM.imageMode = 'remote';
+                try { console.info('[websim-shim] remote image generated (fetch, re-encoded)'); } catch (e) {}
+                return remote;
             }
-            var ct = String(res.headers.get('content-type') || '');
-            if (ct.indexOf('image') === -1) throw new Error('Not an image: ' + ct);
-            return res.blob();
-        }).then(function (blob) {
-            if (!blob || !blob.size) throw new Error('Empty image');
-            SHIM.imageMode = 'remote';
-            return { url: url };
-        }).catch(function (err) {
-            SHIM.imageMode = 'procedural';
-            SHIM.imageRetryAt = Date.now() + ((err && err.httpStatus === 429) ? 120000 : 60000);
-            try { console.warn('[websim-shim] image API unavailable (' + (err && err.message) + '); using procedural renderer'); } catch (e) {}
-            return null;
+            if (state.throttled) return null; // don't burn a probe on a 429
+            return imageLoadTest(url, 12000).then(function (ok) {
+                if (ok) {
+                    SHIM.imageMode = 'remote';
+                    SHIM.fetchBlocked = true;
+                    SHIM.fetchBlockedUntil = Date.now() + 600000;
+                    try { console.info('[websim-shim] remote image generated (img probe)'); } catch (e) {}
+                    return { url: url, via: 'img' };
+                }
+                SHIM.imageMode = 'down';
+                SHIM.imageRetryAt = Date.now() + 90000;
+                return null;
+            });
         });
     }
 
@@ -1008,14 +1190,35 @@
         var prompt = String(opts.prompt || '').trim();
         if (!prompt) return Promise.reject(new Error('imageGen: missing prompt'));
         var dims = resolveDims(opts);
+        var priority = !!opts.priority; // scene images wait for a throttle slot; icons/thumbs don't
 
-        return queueImageJob(function () {
-            return tryRemoteImage(prompt, dims).then(function (remote) {
-                if (remote) return remote;
-                var url = proceduralImage(prompt, dims);
-                return { url: url };
-            });
-        }).catch(function (err) {
+        // Synchronous throttle decision + slot reservation (safe: JS is single-threaded)
+        var plan = { go: false, wait: 0 };
+        var now = Date.now();
+        if (!(SHIM.imageMode === 'down' && now < (SHIM.imageRetryAt || 0))) {
+            var wait = Math.max(0, imgSlotAt - now);
+            var cap = priority ? 14800 : 2500;
+            if (wait <= cap) {
+                plan.go = true;
+                plan.wait = wait;
+                imgSlotAt = now + wait + IMG_GAP_MS;
+            }
+        }
+
+        var run = async function () {
+            if (plan.wait > 0) await sleepMs(plan.wait);
+            if (plan.go) {
+                var remote = await attemptRemoteImage(prompt, dims);
+                if (remote) return { url: remote.url };
+                if (SHIM.imageMode !== 'throttled' && SHIM.imageMode !== 'degraded' && SHIM.imageMode !== 'down') {
+                    SHIM.imageMode = 'down';
+                    SHIM.imageRetryAt = Date.now() + 90000;
+                }
+            }
+            return { url: proceduralImage(prompt, dims) };
+        };
+
+        return run().catch(function (err) {
             // Absolute last resort — still return something renderable.
             try {
                 return { url: proceduralImage(prompt, dims) };
@@ -1499,6 +1702,7 @@
         routeOffline: routeOffline,
         cleanJsonText: cleanJsonText,
         avatarDataUrl: avatarDataUrl,
-        detectBiome: detectBiome
+        detectBiome: detectBiome,
+        proceduralImage: proceduralImage
     };
 })();
