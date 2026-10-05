@@ -1,5 +1,8 @@
-import JSZip from 'jszip';
-import * as THREE from 'https://esm.sh/three';
+// JSZip ships as a classic UMD script (vendor/jszip.min.js) to avoid bare-specifier
+// module resolution issues; THREE is vendored locally for offline reliability.
+const JSZip = window.JSZip;
+if (!window.JSZip) console.error('[boot] JSZip failed to load — zip import/export will be unavailable.');
+import * as THREE from './vendor/three.module.js';
 
 // New Audio Context for Web Audio API
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -45,7 +48,7 @@ const translations = {
             musicLabel: 'Music',
             musicDescription: 'Volume for adaptive background music tracks.',
             lumenLabel: 'Lumen Mode',
-            lumenDescription: 'Intelligent filtering of graphic AI imagery.',
+            lumenDescription: 'Scene images are always shown. Use "Disable Images" to hide all visuals.',
             dateFormatLabel: 'Date Format',
             dateFormatDescription: 'Choose how dates are displayed throughout the UI.',
             clockStyleLabel: 'Clock Style',
@@ -1320,7 +1323,7 @@ function renderPlayerSearch() {
             .replace('{wins}', user.victoryCount);
 
         card.innerHTML = `
-            <img src="${user.avatarUrl}" class="profile-hero-avatar" style="width: 80px; height: 80px; margin-bottom: 10px;" alt="${user.username}" crossorigin="anonymous">
+            <img src="${user.avatarUrl}" class="profile-hero-avatar" style="width: 80px; height: 80px; margin-bottom: 10px;" alt="${user.username}" crossorigin="anonymous" onerror="window.__WS_AVATAR_FALLBACK&&window.__WS_AVATAR_FALLBACK(this)">
             <h4 style="margin: 5px 0;">${user.username}</h4>
             <div class="creator">${statsStr}</div>
             <button class="menu-button small" style="margin-top: 15px; width: 100%; background: linear-gradient(135deg, #00f3ff 0%, #0077ff 100%); color: #050508; border: none; font-weight: 900;">${t('playerSearch.viewProfile')}</button>
@@ -1375,7 +1378,7 @@ function setupChatSubscription() {
             const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             
             item.innerHTML = `
-                <img src="${msg.avatarUrl}" class="chat-avatar user-link" data-username="${msg.username}" alt="${msg.username}" crossorigin="anonymous">
+                <img src="${msg.avatarUrl}" class="chat-avatar user-link" data-username="${msg.username}" alt="${msg.username}" crossorigin="anonymous" onerror="window.__WS_AVATAR_FALLBACK&&window.__WS_AVATAR_FALLBACK(this)">
                 <div class="chat-message-content">
                     <div class="chat-sender-info">
                         <span class="chat-sender-name user-link" data-username="${msg.username}">${msg.username}</span>
@@ -1398,15 +1401,137 @@ async function loadAudio(url) {
     }
     try {
         const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const arrayBuffer = await response.arrayBuffer();
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
         audioCache.set(url, audioBuffer);
         console.log(`Audio loaded and cached: ${url}`);
         return audioBuffer;
     } catch (error) {
-        console.error(`Error loading audio ${url}:`, error);
+        // Asset missing (the original websim media files aren't in the repo) —
+        // synthesize a matching procedural sound so audio still works.
+        console.warn(`Audio asset unavailable (${url}); synthesizing fallback.`, error.message || error);
+        try {
+            const synth = synthesizeFallbackAudio(url);
+            if (synth) {
+                audioCache.set(url, synth);
+                return synth;
+            }
+        } catch (synthError) {
+            console.error(`Fallback synthesis failed for ${url}:`, synthError);
+        }
         return null; // Return null if loading fails
     }
+}
+
+/* Procedural stand-ins for the missing websim audio assets.
+   Sound effects are short synthesized blips/noise bursts; music tracks become
+   gentle looping ambient chord pads so menus and worlds still have a soundtrack. */
+function synthesizeFallbackAudio(url) {
+    const name = String(url).split('/').pop().toLowerCase();
+    const rate = 44100;
+    const isMusic = /music|complex|faceraiders|theme|\.mp3$/.test(name) &&
+        !/^ui_|walk|eat|drink|monster/.test(name);
+    const duration = isMusic ? 8.0 : (/monster/.test(name) ? 1.2 : 0.45);
+    const frameCount = Math.floor(rate * duration);
+    const buffer = audioContext.createBuffer(1, frameCount, rate);
+    const data = buffer.getChannelData(0);
+
+    const noise = (i) => (Math.sin(i * 12.9898) * 43758.5453) % 1;
+
+    if (isMusic) {
+        // Ambient chord pad loop: Am7 -> Fmaj7 arpeggio over a low drone.
+        const progression = [
+            [220.00, 261.63, 329.63, 415.30], // Am7-ish
+            [174.61, 220.00, 261.63, 349.23]  // Fmaj-ish
+        ];
+        for (let i = 0; i < frameCount; i++) {
+            const t = i / rate;
+            const bar = Math.floor(t / 4) % progression.length;
+            const chord = progression[bar];
+            let s = 0;
+            for (let n = 0; n < chord.length; n++) {
+                const freq = chord[n];
+                s += Math.sin(2 * Math.PI * freq * t) * 0.16;
+                s += Math.sin(2 * Math.PI * (freq / 2) * t) * 0.10;
+            }
+            // Soft arpeggio blip every half second.
+            const step = Math.floor(t * 2);
+            const arp = chord[step % chord.length] * 2;
+            const stepPhase = (t * 2) % 1;
+            s += Math.sin(2 * Math.PI * arp * t) * Math.exp(-stepPhase * 6) * 0.12;
+            // Loop-friendly fade at the edges.
+            const edge = Math.min(1, t * 2, (duration - t) * 2);
+            data[i] = Math.tanh(s * 0.8) * 0.5 * Math.max(0, edge);
+        }
+    } else if (/ui_click/.test(name)) {
+        for (let i = 0; i < frameCount; i++) {
+            const t = i / rate;
+            data[i] = Math.sign(Math.sin(2 * Math.PI * 1180 * t)) * Math.exp(-t * 60) * 0.35;
+        }
+    } else if (/ui_confirm/.test(name)) {
+        for (let i = 0; i < frameCount; i++) {
+            const t = i / rate;
+            const f = t < 0.09 ? 880 : 1320;
+            data[i] = Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 14) * 0.4;
+        }
+    } else if (/ui_error/.test(name)) {
+        for (let i = 0; i < frameCount; i++) {
+            const t = i / rate;
+            const f = 340 - t * 260;
+            data[i] = Math.sign(Math.sin(2 * Math.PI * f * t)) * Math.exp(-t * 9) * 0.32;
+        }
+    } else if (/ui_gain/.test(name)) {
+        for (let i = 0; i < frameCount; i++) {
+            const t = i / rate;
+            data[i] = (Math.sin(2 * Math.PI * 1320 * t) + 0.6 * Math.sin(2 * Math.PI * 1980 * t)) *
+                Math.exp(-t * 7) * 0.3;
+        }
+    } else if (/ui_lose/.test(name)) {
+        for (let i = 0; i < frameCount; i++) {
+            const t = i / rate;
+            const f = 420 - t * 500;
+            data[i] = Math.sin(2 * Math.PI * Math.max(80, f) * t) * Math.exp(-t * 8) * 0.36;
+        }
+    } else if (/walk/.test(name)) {
+        // Two soft footfalls.
+        for (let i = 0; i < frameCount; i++) {
+            const t = i / rate;
+            const burst = (t < 0.12 || (t > 0.22 && t < 0.34)) ? 1 : 0;
+            const local = (t > 0.22) ? t - 0.22 : t;
+            data[i] = (noise(i) * 0.7 + Math.sin(2 * Math.PI * 90 * t) * 0.3) *
+                burst * Math.exp(-local * 30) * 0.4;
+        }
+    } else if (/drink/.test(name)) {
+        for (let i = 0; i < frameCount; i++) {
+            const t = i / rate;
+            const p = (t * 7) % 1;
+            const f = 400 + Math.sin(t * 18) * 260;
+            data[i] = Math.sin(2 * Math.PI * f * t) * Math.exp(-p * 4) * 0.25;
+        }
+    } else if (/eat/.test(name)) {
+        for (let i = 0; i < frameCount; i++) {
+            const t = i / rate;
+            const burst = (t < 0.06 || (t > 0.12 && t < 0.18)) ? 1 : 0;
+            const local = (t > 0.12) ? t - 0.12 : t;
+            data[i] = noise(i * 1.7) * burst * Math.exp(-local * 45) * 0.5;
+        }
+    } else if (/monster/.test(name)) {
+        for (let i = 0; i < frameCount; i++) {
+            const t = i / rate;
+            const trem = 0.6 + 0.4 * Math.sin(2 * Math.PI * 9 * t);
+            const growl = Math.sin(2 * Math.PI * 72 * t) + 0.5 * Math.sin(2 * Math.PI * 108 * t) +
+                0.25 * noise(i * 0.4);
+            data[i] = growl * trem * Math.exp(-t * 2.2) * 0.4;
+        }
+    } else {
+        for (let i = 0; i < frameCount; i++) {
+            const t = i / rate;
+            data[i] = Math.sin(2 * Math.PI * 720 * t) * Math.exp(-t * 30) * 0.3;
+        }
+    }
+
+    return buffer;
 }
 
 function playSound(buffer, volume = 0.7) {
@@ -1801,66 +1926,6 @@ Respond only with the resulting text.`;
         }
         console.error("Error summarizing text:", error);
         return originalText;
-    }
-}
-
-// New AI function to check if content is graphic
-async function checkIfContentIsGraphic(text, signal) {
-    const GRAPHIC_DETECTION_TIMEOUT_MS = 7000; // Shorter timeout for this quick check
-
-    try {
-        const graphicDetectionPromise = websim.chat.completions.create({
-            messages: [
-                {
-                    role: "system",
-                    content: `Analyze the following game description for potentially graphic, gory, or intensely disturbing content, including grotesque entities, severe body horror, or explicit, violent hallucinations.
-Respond directly with JSON, following this JSON schema, and no other text.
-{
-  "isGraphic": boolean;
-  "reason": string; // A brief reason if graphic content is detected.
-}
-Do not consider general unsettling, eerie, or liminal descriptions as graphic unless they explicitly describe gore, severe mutilation, grotesque bodily distortions, or highly disturbing and explicit hallucinatory violence.
-`
-                },
-                {
-                    type: "user",
-                    content: text
-                }
-            ],
-            json: true,
-            signal: signal
-        });
-
-        const timeoutPromise = new Promise((resolve, reject) => {
-            const id = setTimeout(() => {
-                clearTimeout(id);
-                reject(new Error("Graphic detection AI timed out."));
-            }, GRAPHIC_DETECTION_TIMEOUT_MS);
-        });
-
-        const completion = await Promise.race([graphicDetectionPromise, timeoutPromise]);
-
-        let result;
-        try {
-            result = JSON.parse(completion.content);
-        } catch (parseError) {
-            console.error("Failed to parse graphic detection AI response as JSON:", completion.content, parseError);
-            throw new Error("Graphic detection AI returned invalid JSON.");
-        }
-
-        if (typeof result.isGraphic === 'boolean') {
-            console.log(`Graphic content detection: ${result.isGraphic}. Reason: ${result.reason || 'N/A'}`);
-            return result.isGraphic;
-        } else {
-            throw new Error("Graphic detection AI response missing 'isGraphic' boolean.");
-        }
-    } catch (error) {
-        if (error.name === 'AbortError') {
-            throw error; // Propagate abort signal
-        }
-        console.error("Error during graphic content detection:", error);
-        // Default to not graphic if AI fails, to avoid unnecessary censoring
-        return false;
     }
 }
 
@@ -3609,7 +3674,7 @@ async function generateItemImage(itemName) {
         return result.url;
     } catch (err) {
         console.error("Failed to generate item icon for", itemName, err);
-        return 'menu.png'; // Fallback icon
+        return 'menu.svg'; // Fallback icon
     }
 }
 
@@ -3957,7 +4022,8 @@ async function handlePlayerAction(displayActionText, aiContextActionText, clearP
                     lastSceneImageUrl = originalImageURL || '';
                     lastSceneWasHidden = false;
 
-                    // Handle three modes: 'hide' (censor graphic), 'disable' (no images shown), 'off' (show images)
+                    // Lumen Mode: 'disable' suppresses images entirely; otherwise always show
+                    // (the old AI graphic-content detector has been removed).
                     if (imageCensoringMode === 'disable') {
                         // Do not display images at all; remember the URL in case user toggles later
                         lastHiddenImageUrl = originalImageURL || '';
@@ -3968,40 +4034,6 @@ async function handlePlayerAction(displayActionText, aiContextActionText, clearP
                         PanoramaViewer.hide();
                         appendOutputContent("Images are disabled in Lumen Mode. Visuals are suppressed.", 'text', 'status-message');
                         console.log("Image Censoring: Images disabled by user preference.");
-                    } else if (imageCensoringMode === 'hide' && originalImageURL) {
-                        let graphicCheckPass = false;
-                        try {
-                            graphicCheckPass = await checkIfContentIsGraphic(description, signal);
-                        } catch (censoringError) {
-                            if (censoringError.name === 'AbortError') throw censoringError;
-                            console.warn(`Image censoring AI failed: ${censoringError.message}. Proceeding without graphic check.`);
-                        }
-
-                        if (graphicCheckPass) {
-                            lastHiddenImageUrl = originalImageURL;
-                            lastSceneWasHidden = true;
-                            graphicContentWarning.classList.remove('hidden'); // Show graphic warning
-                            currentSceneImage.src = 'graphiccontent.png'; // Set scene image to warning
-                            currentSceneImage.classList.remove('hidden');
-                            PanoramaViewer.hide();
-                            appendOutputContent("Graphic content detected. Image hidden due to censorship settings.", 'text', 'status-message');
-                            console.log("Image Censoring: Graphic content hidden.");
-                        } else {
-                            // Not graphic, hide the warning and show the actual image
-                            graphicContentWarning.classList.add('hidden');
-                            lastSceneWasHidden = false;
-                            if (originalImageURL) {
-                                if (panoramicMode) {
-                                    PanoramaViewer.init(document.getElementById('panorama-container'));
-                                    PanoramaViewer.loadTexture(originalImageURL);
-                                } else {
-                                    PanoramaViewer.hide();
-                                    lastNon360ImageUrl = originalImageURL;
-                                    await displayNewImageWithSwipe(originalImageURL);
-                                }
-                            }
-                            lastHiddenImageUrl = '';
-                        }
                     } else {
                         // Censoring is off, just show the image
                         graphicContentWarning.classList.add('hidden');
@@ -5484,7 +5516,7 @@ function refreshWorldSavesList(worldName) {
             // 3) Else fall back to the world's thumbnail.
             // 4) Finally fall back to a generic background.
             const thumbnailUrl = save.wasImageHidden
-                ? 'graphicpreview.png'
+                ? 'graphicpreview.svg'
                 : (save.lastImageSrc || worldFallbackThumb || 'background.jpg');
             const dateObj = new Date(save.timestamp);
         const timeStr = `${formatDateForUI(dateObj)} ${formatTimeForUI(dateObj)}`;
@@ -5596,7 +5628,7 @@ function loadSaveGame(saveId) {
             graphicContentWarning.classList.add('hidden');
             appendOutputContent("This save contains a previously hidden image, but images are disabled in your settings.", 'text', 'status-message');
         } else {
-            currentSceneImage.src = 'graphiccontent.png'; 
+            currentSceneImage.src = 'graphiccontent.svg'; 
             currentSceneImage.classList.remove('hidden');
             if (imageCensoringMode === 'hide') {
                 graphicContentWarning.classList.remove('hidden');
@@ -7807,6 +7839,8 @@ function openUserProfile(username) {
 
     userProfileMenu.classList.remove('hidden');
     profileUsername.textContent = username;
+    profileAvatar.alt = username;
+    profileAvatar.onerror = () => window.__WS_AVATAR_FALLBACK && window.__WS_AVATAR_FALLBACK(profileAvatar);
     profileAvatar.src = `https://images.websim.com/avatar/${username}`;
 
     const userWorlds = sharedWorlds.filter(w => w.username === username);

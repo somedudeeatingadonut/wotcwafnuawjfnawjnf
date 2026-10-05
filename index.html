@@ -15,7 +15,7 @@
     <!-- NEW: Loading Splash Screen -->
     <div id="loading-splash" class="loading-splash">
         <div class="loading-container">
-            <img src="loading.png" alt="Loading Hallway" class="loading-image" crossorigin="anonymous">
+            <img src="loading.jpg" alt="Loading Hallway" class="loading-image" crossorigin="anonymous">
             <p class="mobile-disclaimer" data-i18n="loading.pcDisclaimer">DESIGNED FOR PC. MOBILE EXPERIENCE MAY BE UNBEARABLE.</p>
         </div>
     </div>
@@ -70,7 +70,7 @@
                     <span class="btn-text" data-i18n="main.credits">Credits</span>
                 </button>
                 <button id="secret-embed-btn" class="menu-button square-btn" data-i18n-title="main.unknownProtocol" title="Unknown Protocol">
-                    <img src="v1.png" alt="Unknown Protocol" class="btn-icon-img" crossorigin="anonymous">
+                    <img src="v1.svg" alt="Unknown Protocol" class="btn-icon-img" crossorigin="anonymous">
                 </button>
             </div>
 
@@ -227,12 +227,12 @@
                     <div class="option-card">
                         <div class="option-info">
                             <label for="image-censoring-select" data-i18n="settings.lumenLabel">Lumen Mode</label>
-                            <p class="option-description" data-i18n="settings.lumenDescription">Intelligent filtering of graphic AI imagery.</p>
+                            <p class="option-description" data-i18n="settings.lumenDescription">Scene images are always shown. Use "Disable Images" to hide all visuals.</p>
                         </div>
                         <div class="custom-select-wrapper">
                             <select id="image-censoring-select" class="option-select">
                                 <option value="off">Off (Raw)</option>
-                                <option value="hide" selected>Censored</option>
+                                <option value="hide" selected>Standard</option>
                                 <option value="disable">Disable Images</option>
                             </select>
                         </div>
@@ -723,7 +723,7 @@
 
 
         <!-- NEW: Return to Main Menu Button -->
-        <button id="return-to-menu-btn" class="return-to-menu-button"><img src="menu.png" alt="Main Menu" class="menu-icon" crossorigin="anonymous"></button>
+        <button id="return-to-menu-btn" class="return-to-menu-button"><img src="menu.svg" alt="Main Menu" class="menu-icon" crossorigin="anonymous"></button>
         
         <div class="game-area">
             <div id="immersive-toggles" class="immersive-toggles">
@@ -737,7 +737,7 @@
                     <img id="current-scene-image" alt="World Scene" src="" crossorigin="anonymous">
                     <canvas id="swipe-canvas"></canvas>
                     <!-- NEW: Replace button with clickable image -->
-                    <img id="graphic-content-warning" class="graphic-content-warning hidden" src="graphiccontent.png" alt="Graphic content warning" style="cursor: pointer;" crossorigin="anonymous">
+                    <img id="graphic-content-warning" class="graphic-content-warning hidden" src="graphiccontent.svg" alt="Graphic content warning" style="cursor: pointer;" crossorigin="anonymous">
                 </div>
                 <div id="text-output" class="text-output">
                     <!-- Initial narrative and subsequent text content will be dynamically loaded here -->
@@ -776,8 +776,7 @@
     <script type="importmap">
         {
           "imports": {
-            "jszip": "https://esm.sh/jszip@3.10.1",
-            "three": "https://esm.sh/three@0.160.0"
+            "three": "./vendor/three.module.js"
           }
         }
     </script>
@@ -1289,6 +1288,8 @@
         </div>
     </div>
 
+    <script src="vendor/jszip.min.js"></script>
+    <script src="vendor/websim-shim.js"></script>
     <script src="script.js" type="module"></script>
 
 </body>

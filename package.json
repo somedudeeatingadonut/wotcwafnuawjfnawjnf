@@ -1,0 +1,11 @@
+{
+  "name": "ai-world-maker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI World Maker — standalone (websim-free) procedural adventure engine",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check script.js; node --check vendor/websim-shim.js; node --check server.mjs"
+  }
+}
