@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI World Maker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- NEW: Menu Background Shader Container -->
+    <div id="menu-backgrounds">
+        <canvas id="menu-shader-canvas"></canvas>
+    </div>
+
+    <!-- NEW: Loading Splash Screen -->
+    <div id="loading-splash" class="loading-splash">
+        <div class="loading-container">
+            <img src="loading.png" alt="Loading Hallway" class="loading-image" crossorigin="anonymous">
+            <p class="mobile-disclaimer" data-i18n="loading.pcDisclaimer">DESIGNED FOR PC. MOBILE EXPERIENCE MAY BE UNBEARABLE.</p>
+        </div>
+    </div>
+
+    <div id="main-menu" class="main-menu hidden">
+        <div class="menu-branding">
+            <h1 class="main-title" id="title-main"><span data-i18n="main.titlePrefix">AI WORLD</span> <span class="accent" data-i18n="main.titleSuffix">MAKER</span></h1>
+            <p class="main-tagline" id="tagline-main" data-i18n="main.tagline">THE ULTIMATE PROCEDURAL ADVENTURE ENGINE</p>
+        </div>
+
+        <nav class="menu-nav">
+            <div class="primary-actions">
+                <button id="manage-worlds-btn" class="menu-button hero">
+                    <span class="btn-icon">🌎</span>
+                    <span class="btn-text" data-i18n="main.myWorlds">MY WORLDS</span>
+                </button>
+                <button id="browse-online-btn" class="menu-button hero">
+                    <span class="btn-icon">🌐</span>
+                    <span class="btn-text" data-i18n="main.onlineGallery">ONLINE GALLERY</span>
+                </button>
+                <div class="special-buttons-container">
+                    <button id="featured-worlds-btn" class="menu-button special-btn daily">
+                        <span class="btn-icon">💎</span>
+                        <span class="btn-text" data-i18n="main.featuredWorlds">FEATURED WORLDS</span>
+                    </button>
+                    <button id="world-roulette-btn" class="menu-button special-btn roulette">
+                        <span class="btn-icon">🎲</span>
+                        <span class="btn-text" data-i18n="main.worldRoulette">WORLD ROULETTE</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="secondary-actions">
+                <button id="live-chat-btn" class="menu-button compact">
+                    <span class="btn-icon">💬</span>
+                    <span class="btn-text" data-i18n="main.liveChat">Live Chat</span>
+                </button>
+                <button id="settings-btn" class="menu-button compact">
+                    <span class="btn-icon">⚙️</span>
+                    <span class="btn-text" data-i18n="main.settings">Settings</span>
+                </button>
+                <button id="about-btn" class="menu-button compact">
+                    <span class="btn-icon">ℹ️</span>
+                    <span class="btn-text" data-i18n="main.about">About</span>
+                </button>
+                <button id="player-search-btn" class="menu-button compact">
+                    <span class="btn-icon">🔍</span>
+                    <span class="btn-text" data-i18n="main.findPlayers">Find Players</span>
+                </button>
+                <button id="credits-btn" class="menu-button compact">
+                    <span class="btn-icon">✨</span>
+                    <span class="btn-text" data-i18n="main.credits">Credits</span>
+                </button>
+                <button id="secret-embed-btn" class="menu-button square-btn" data-i18n-title="main.unknownProtocol" title="Unknown Protocol">
+                    <img src="v1.png" alt="Unknown Protocol" class="btn-icon-img" crossorigin="anonymous">
+                </button>
+            </div>
+
+            <div class="admin-actions">
+                <button id="shadow-realm-btn" class="menu-button compact hidden">
+                    <span class="btn-icon">💀</span>
+                    <span class="btn-text">Shadow Realm</span>
+                </button>
+                <button id="reports-btn" class="menu-button compact hidden">
+                    <span class="btn-icon">🚩</span>
+                    <span class="btn-text">Reports</span>
+                </button>
+            </div>
+        </nav>
+        
+        <div class="menu-footer">
+            <div class="footer-left">
+                <span class="websim-tag" data-i18n="main.poweredBy">POWERED BY WEBSIM AI</span>
+                <p class="mobile-disclaimer menu-small" data-i18n="main.pcOptimized">PC OPTIMIZED • MOBILE MAY BE UNBEARABLE</p>
+            </div>
+            <div class="footer-right" style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+                <button class="credits-link-button menu-button small" data-url="https://linktr.ee/Speedymule" style="min-width: auto; padding: 8px 20px; font-size: 0.8rem; background: linear-gradient(135deg, #43e660 0%, #1e8d30 100%); color: #fff; border: none; box-shadow: 0 4px 10px rgba(67, 230, 96, 0.2);">
+                    <span class="btn-icon">🌳</span>
+                    <span class="btn-text">Linktree</span>
+                </button>
+                <button class="credits-link-button menu-button small" data-url="https://discord.gg/bdQJgfxqvp" style="min-width: auto; padding: 8px 20px; font-size: 0.8rem; background: linear-gradient(135deg, #5865f2 0%, #404eed 100%); color: #fff; border: none; box-shadow: 0 4px 10px rgba(88, 101, 242, 0.2);">
+                    <span class="btn-icon">👾</span>
+                    <span class="btn-text">Discord</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-menu" class="full-screen-menu hidden">
+        <div class="menu-header-row">
+            <h3 data-i18n="settings.title">SYSTEM SETTINGS</h3>
+            <button id="main-menu-close-options-button" class="back-circle-btn">×</button>
+        </div>
+        <div class="settings-layout">
+            <nav class="settings-sidebar">
+                <button class="settings-tab-btn active" data-target="settings-cat-interface">
+                    <span class="tab-icon">🖥️</span>
+                    <span data-i18n="settings.catInterface">Interface</span>
+                </button>
+                <button class="settings-tab-btn" data-target="settings-cat-simulation">
+                    <span class="tab-icon">🧠</span>
+                    <span data-i18n="settings.catSimulation">Simulation</span>
+                </button>
+                <button class="settings-tab-btn" data-target="settings-cat-audio">
+                    <span class="tab-icon">🔊</span>
+                    <span data-i18n="settings.catAudio">Audio</span>
+                </button>
+                <button class="settings-tab-btn" data-target="settings-cat-graphics">
+                    <span class="tab-icon">🎨</span>
+                    <span data-i18n="settings.catGraphics">Graphics</span>
+                </button>
+                <button class="settings-tab-btn" data-target="settings-cat-maintenance">
+                    <span class="tab-icon">🛠️</span>
+                    <span data-i18n="settings.catMaintenance">Maintenance</span>
+                </button>
+
+                <div class="settings-sidebar-footer">
+                    <button id="reset-settings-btn" class="menu-button secondary small" data-i18n="settings.resetBtn">Reset Defaults</button>
+                </div>
+            </nav>
+            <div class="settings-main">
+                <!-- Interface Category -->
+                <div id="settings-cat-interface" class="settings-panel active">
+                    <div class="option-card">
+                        <div class="option-info">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <label for="language-select" data-i18n="settings.languageLabel">Language</label>
+                            </div>
+                            <p class="option-description" data-i18n="settings.languageDescription">Change the interface language.</p>
+                        </div>
+                        <div class="custom-select-wrapper">
+                            <select id="language-select" class="option-select">
+                                <option value="en">English</option>
+                                <option value="pt">Português (PT-BR)</option>
+                                <option value="pl">Polski</option>
+                                <option value="ar">العربية</option>
+                                <option value="fil">Filipino</option>
+                                <option value="id">Bahasa Indonesia</option>
+                                <option value="de">Deutsch</option>
+                                <option value="uk">Українська</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="option-card">
+                        <div class="option-info">
+                            <label for="ui-layout-select">UI Layout</label>
+                            <p class="option-description">Switch between the classic panel layout and an immersive overlay view.</p>
+                        </div>
+                        <div class="custom-select-wrapper">
+                            <select id="ui-layout-select" class="option-select">
+                                <option value="legacy">Legacy (Panels)</option>
+                                <option value="immersive" selected>Immersive (Image Focus)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="option-card">
+                        <div class="option-info">
+                            <label for="time-format-select" data-i18n="settings.dateFormatLabel">Date Format</label>
+                            <p class="option-description" data-i18n="settings.dateFormatDescription">Choose how dates are displayed throughout the UI.</p>
+                        </div>
+                        <div class="custom-select-wrapper">
+                            <select id="time-format-select" class="option-select">
+                                <option value="mdy" selected>M/D/Y (e.g., 12/31/2023)</option>
+                                <option value="dmy">D/M/Y (e.g., 31/12/2023)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="option-card">
+                        <div class="option-info">
+                            <label for="corner-rounding-select" data-i18n="settings.cornerRoundingLabel">Corner Rounding</label>
+                            <p class="option-description" data-i18n="settings.cornerRoundingDescription">Toggle rounded edges for UI elements.</p>
+                        </div>
+                        <div class="custom-select-wrapper">
+                            <select id="corner-rounding-select" class="option-select">
+                                <option value="on" selected data-i18n="settings.enabled">Enabled (Rounded)</option>
+                                <option value="off" data-i18n="settings.disabled">Disabled (Sharp)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="option-card">
+                        <div class="option-info">
+                            <label for="time-clock-select" data-i18n="settings.clockStyleLabel">Clock Style</label>
+                            <p class="option-description" data-i18n="settings.clockStyleDescription">Toggle between 12-hour and 24-hour time display.</p>
+                        </div>
+                        <div class="custom-select-wrapper">
+                            <select id="time-clock-select" class="option-select">
+                                <option value="12" selected>12-hour</option>
+                                <option value="24">24-hour</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI & Simulation Category -->
+                <div id="settings-cat-simulation" class="settings-panel">
+                    <div class="option-card">
+                        <div class="option-info">
+                            <label for="main-menu-summarize-select" data-i18n="settings.compressionLabel">Compression Level</label>
+                            <p class="option-description" data-i18n="settings.compressionDescription">Reduces AI text length via recursive summarization.</p>
+                        </div>
+                        <div class="custom-select-wrapper">
+                            <select id="main-menu-summarize-select" class="option-select">
+                                <option value="off">Off</option>
+                                <option value="level1">Level 1 (Concise)</option>
+                                <option value="level2" selected>Level 2 (Critical Only)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="option-card">
+                        <div class="option-info">
+                            <label for="image-censoring-select" data-i18n="settings.lumenLabel">Lumen Mode</label>
+                            <p class="option-description" data-i18n="settings.lumenDescription">Intelligent filtering of graphic AI imagery.</p>
+                        </div>
+                        <div class="custom-select-wrapper">
+                            <select id="image-censoring-select" class="option-select">
+                                <option value="off">Off (Raw)</option>
+                                <option value="hide" selected>Censored</option>
+                                <option value="disable">Disable Images</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Audio Category -->
+                <div id="settings-cat-audio" class="settings-panel">
+                    <div class="option-card">
+                        <div class="option-info">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <label for="ui-sounds-slider" data-i18n="settings.soundsLabel">Sounds</label>
+                                <span id="ui-sounds-value" class="slider-value">70%</span>
+                            </div>
+                            <p class="option-description" data-i18n="settings.soundsDescription">Volume for interface sound effects and haptic simulation.</p>
+                        </div>
+                        <div class="slider-wrapper">
+                            <input type="range" id="ui-sounds-slider" class="option-slider" min="0" max="1" step="0.05" value="0.7">
+                        </div>
+                    </div>
+                    <div class="option-card">
+                        <div class="option-info">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <label for="music-slider" data-i18n="settings.musicLabel">Music</label>
+                                <span id="music-value" class="slider-value">40%</span>
+                            </div>
+                            <p class="option-description" data-i18n="settings.musicDescription">Volume for adaptive background music tracks.</p>
+                        </div>
+                        <div class="slider-wrapper">
+                            <input type="range" id="music-slider" class="option-slider" min="0" max="1" step="0.05" value="0.4">
+                        </div>
+                    </div>
+                    <div class="option-card">
+                        <div class="option-info">
+                            <label for="tts-toggle-select" data-i18n="settings.ttsLabel">Voice Acting (TTS)</label>
+                            <p class="option-description" data-i18n="settings.ttsDescription">Enable AI-generated voice acting for characters.</p>
+                        </div>
+                        <div class="custom-select-wrapper">
+                            <select id="tts-toggle-select" class="option-select">
+                                <option value="on">Enabled</option>
+                                <option value="off">Disabled</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Maintenance Category -->
+                <div id="settings-cat-maintenance" class="settings-panel">
+                    <div class="option-card">
+                        <div class="option-info">
+                            <label data-i18n="settings.fileSystemTitle">FILE SYSTEM DIRECTORIES</label>
+                            <p class="option-description" data-i18n="settings.fileSystemDesc">Access and manage the raw data structures stored in your browser's local storage.</p>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <div style="display: flex; gap: 10px; width: 100%;">
+                                <div class="custom-select-wrapper" style="flex: 1;">
+                                    <select id="data-dir-os-select" class="option-select">
+                                        <option value="win">Windows</option>
+                                        <option value="mac">macOS</option>
+                                        <option value="linux">Linux</option>
+                                    </select>
+                                </div>
+                                <div class="custom-select-wrapper" style="flex: 1;">
+                                    <select id="data-dir-browser-select" class="option-select">
+                                        <option value="chrome">Google Chrome</option>
+                                        <option value="edge">Microsoft Edge</option>
+                                        <option value="brave">Brave Browser</option>
+                                        <option value="chromium">Chromium</option>
+                                        <option value="firefox">Mozilla Firefox</option>
+                                        <option value="opera">Opera</option>
+                                        <option value="operagx">Opera GX</option>
+                                        <option value="vivaldi">Vivaldi</option>
+                                        <option value="arc">Arc Browser</option>
+                                        <option value="tor">Tor Browser</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="linux-type-wrapper" class="hidden">
+                                <div class="custom-select-wrapper">
+                                    <select id="data-dir-linux-type-select" class="option-select">
+                                        <option value="native">Native (.config)</option>
+                                        <option value="flatpak">Flatpak</option>
+                                        <option value="snap">Snap Package</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button id="copy-data-dir-btn" class="menu-button hero small" style="width: 100%; border-radius: 8px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2);">
+                                <span class="btn-icon">📋</span> <span data-i18n="settings.copyDirPath">COPY DATA DIRECTORY PATH</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="option-card">
+                        <div class="option-info">
+                            <label data-i18n="settings.dataExportTitle">DATA BACKUP & PORTABILITY</label>
+                            <p class="option-description" data-i18n="settings.dataExportDesc">Download your entire local library as a single master archive.</p>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <button id="export-full-backup-btn" class="menu-button hero small" style="min-width: 100%; border-radius: 8px;">
+                                <span class="btn-icon">📤</span> <span data-i18n="settings.exportFull">EXPORT FULL MASTER BACKUP (.zip)</span>
+                            </button>
+                            <button id="import-full-backup-btn" class="menu-button hero small" style="min-width: 100%; border-radius: 8px; background: rgba(0, 243, 255, 0.05); border: 1px solid rgba(0, 243, 255, 0.2); color: #00f3ff;">
+                                <span class="btn-icon">📥</span> <span data-i18n="settings.importFull">IMPORT MASTER BACKUP (.zip)</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Graphics Category -->
+                <div id="settings-cat-graphics" class="settings-panel">
+                    <div class="option-card">
+                        <div class="option-info">
+                            <label for="background-select" data-i18n="settings.backgroundLabel">Background Effects</label>
+                            <p class="option-description" data-i18n="settings.backgroundDescription">Enable or disable the animated menu background shader (disable for low-end PCs).</p>
+                        </div>
+                        <div class="custom-select-wrapper">
+                            <select id="background-select" class="option-select">
+                                <option value="on">Enabled</option>
+                                <option value="off">Disabled</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="option-card">
+                        <div class="option-info">
+                            <label for="image-interpolation-select" data-i18n="settings.downscaling">Image Downscaling</label>
+                            <p class="option-description" data-i18n="settings.downscalingDesc">Change the algorithm used to render world visuals at smaller sizes.</p>
+                        </div>
+                        <div class="custom-select-wrapper">
+                            <select id="image-interpolation-select" class="option-select">
+                                <option value="bicubic" data-i18n="settings.bicubic">Bicubic (High Quality)</option>
+                                <option value="bilinear" data-i18n="settings.bilinear">Bilinear (Standard)</option>
+                                <option value="nearest" selected data-i18n="settings.nearest">Nearest Neighbor (Pixelated)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="option-card">
+                        <div class="option-info">
+                            <label for="panoramic-mode-select" data-i18n="settings.panoramic">360 Panorama</label>
+                            <p class="option-description" data-i18n="settings.panoramicDesc">Generates immersive 360° views you can look around in.</p>
+                        </div>
+                        <div class="custom-select-wrapper">
+                            <select id="panoramic-mode-select" class="option-select">
+                                <option value="on" data-i18n="settings.enabled">Enabled</option>
+                                <option value="off" data-i18n="settings.disabled">Disabled</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="option-card">
+                        <div class="option-info">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <label for="panoramic-fov-slider" data-i18n="settings.fov">360 Field of View</label>
+                                <span id="panoramic-fov-value" class="slider-value">75°</span>
+                            </div>
+                            <p class="option-description" data-i18n="settings.fovDesc">Adjust the default zoom level for 360-degree views.</p>
+                        </div>
+                        <div class="slider-wrapper">
+                            <input type="range" id="panoramic-fov-slider" class="option-slider" min="30" max="110" step="1" value="75">
+                        </div>
+                    </div>
+                    <div class="option-card">
+                        <div class="option-info">
+                            <label for="vr-mode-select" data-i18n="settings.vrSupport">VR Support (WebXR)</label>
+                            <p class="option-description" data-i18n="settings.vrDesc">Enable Virtual Reality mode for 360-degree worlds. Requires a compatible headset.</p>
+                        </div>
+                        <div class="custom-select-wrapper">
+                            <select id="vr-mode-select" class="option-select">
+                                <option value="off" data-i18n="settings.disabled">Disabled</option>
+                                <option value="on" data-i18n="settings.enabled">Enabled</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="live-chat-menu" class="full-screen-menu hidden">
+        <div class="menu-header-row">
+            <h3 data-i18n="chat.title">Global Chat</h3>
+            <button id="live-chat-close-btn" class="back-circle-btn">×</button>
+        </div>
+        <div class="menu-content wide">
+            <div class="chat-wrapper">
+                <div id="chat-messages" class="chat-messages-container">
+                    <!-- Messages will appear here -->
+                </div>
+                <form id="chat-input-form" class="chat-input-area">
+                    <input type="text" id="chat-input" placeholder="Type a message..." maxlength="200" autocomplete="off" data-i18n-placeholder="chat.placeholder">
+                    <button type="submit" id="send-chat-btn" class="menu-button small" data-i18n="chat.send">Send</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="about-menu" class="full-screen-menu hidden">
+        <div class="menu-header-row">
+            <h3 data-i18n="about.title">About the Engine</h3>
+            <button id="about-close-btn" class="back-circle-btn">×</button>
+        </div>
+        <div class="menu-content" style="max-width: 800px; padding: 0 20px;">
+            <div class="details-description-card" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(0, 243, 255, 0.2); padding: 40px; border-radius: 24px;">
+                <label style="color: #00f3ff; font-size: 1.2em; margin-bottom: 20px;" data-i18n="about.notice">NARRATIVE SIMULATION NOTICE</label>
+                <p style="font-size: 1.2em; line-height: 1.8; color: #f0f0f0; margin-bottom: 25px;" data-i18n-html="about.p1">
+                    AI World Maker is an <span style="color: #00f3ff; font-weight: bold;">AI-driven text adventure engine</span>. It uses advanced language models to act as a dynamic Game Master, generating stories, consequences, and descriptions based on your unique prompts.
+                </p>
+                <p style="font-size: 1.1em; line-height: 1.7; color: #ccc; margin-bottom: 25px;" data-i18n-html="about.p2">
+                    Please understand that this is <span style="text-decoration: underline;">not</span> a traditional 3D game engine. There are no actual physical "worlds" to explore in a literal sense. Instead, the engine synthesizes <span style="color: #ff00ff;">AI-generated snapshots</span> to visualize your journey. 
+                </p>
+                <p style="font-size: 1.1em; line-height: 1.7; color: #ccc; margin-bottom: 25px;" data-i18n="about.p3">
+                    Every scene is a hallucination of the AI, designed to provide atmosphere to the text-based core of the simulation. Your choices drive the narrative, while the visuals act as a window into the AI's interpretation of your world.
+                </p>
+                <p style="font-size: 1.1em; line-height: 1.7; color: #ccc; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 25px;" data-i18n-html="about.techNote">
+                    <span style="color: #00f3ff; font-weight: bold;">TECH NOTE:</span> The <span style="font-family: monospace; color: #ff00ff;">.aiworld</span> export files are standard <span style="font-weight: bold;">ZIP archives</span> containing your world configuration, metadata, and adventure logs.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div id="credits-menu" class="full-screen-menu hidden">
+        <div class="menu-header-row">
+            <h3 data-i18n="credits.title">Credits</h3>
+            <button id="credits-close-btn" class="back-circle-btn">×</button>
+        </div>
+        <div class="menu-content">
+            <div class="credits-grid">
+                <div class="credit-card">
+                    <span class="credit-label" data-i18n="credits.creator">Creator</span>
+                    <button class="credits-link-button menu-button" data-url="https://linktr.ee/Speedymule">Speedymule</button>
+                </div>
+                <div class="credit-card">
+                    <span class="credit-label" data-i18n="credits.vfx">Visual Effects</span>
+                    <button class="credits-link-button menu-button secondary" data-url="https://www.shadertoy.com/view/Wt33Wf">Jan Mróz — ShaderToy</button>
+                </div>
+                <div class="credit-card">
+                    <span class="credit-label" data-i18n="credits.music">Menu Theme</span>
+                    <span class="credit-value">Alejandro Magaña</span>
+                </div>
+                <div class="credit-card">
+                    <span class="credit-label" data-i18n="credits.engine">Engine</span>
+                    <span class="credit-value">Websim AI Engine</span>
+                </div>
+                <div class="credit-card">
+                    <span class="credit-label" data-i18n="credits.editorMusic">Face Raiders OST</span>
+                    <button class="credits-link-button menu-button secondary" data-url="https://youtu.be/g4wPhlF5IQg?si=8m9JyJ5H6m9YE2zy">Editor Music</button>
+                </div>
+                <div class="credit-card">
+                    <span class="credit-label" data-i18n="credits.legacy">Legacy</span>
+                    <button class="credits-link-button menu-button secondary" data-url="https://websim.com/@Speedymule6858/the-backrooms-simulator/421">AI Backrooms Sim Legacy</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="worlds-menu" class="full-screen-menu hidden">
+        <div class="menu-header-row">
+            <h3 data-i18n="worlds.title">My Worlds</h3>
+            <button id="import-world-btn" class="menu-button compact" style="margin-left: 25px; height: 46px; min-width: 180px; font-size: 0.85rem; border-radius: 10px; background: rgba(0, 243, 255, 0.08); border: 1px solid rgba(0, 243, 255, 0.3); color: #00f3ff; box-shadow: 0 4px 12px rgba(0, 243, 255, 0.1);" data-i18n="worlds.import">Import .aiworld</button>
+            <button id="close-worlds-menu-btn" class="back-circle-btn" data-i18n-title="main.back" title="Back">×</button>
+        </div>
+        <div class="menu-content wide">
+            <div class="mode-selector" style="margin-bottom: 25px;">
+                <button id="tab-local-btn" class="mode-btn active" data-i18n="worlds.tabLocal">My Library</button>
+                <button id="tab-played-btn" class="mode-btn" data-i18n="worlds.tabPlayed">Played from Gallery</button>
+                <button id="tab-uploaded-btn" class="mode-btn" data-i18n="worlds.tabUploaded">My Uploads</button>
+            </div>
+            
+            <div id="worlds-list" class="worlds-grid-container">
+                <!-- Worlds will be listed here -->
+            </div>
+        </div>
+    </div>
+
+    <div id="create-world-menu" class="full-screen-menu hidden">
+        <div class="menu-header-row">
+            <h3 id="create-world-title">New World Concept</h3>
+            <button id="cancel-create-world-btn" class="back-circle-btn" title="Cancel">×</button>
+        </div>
+        <div class="menu-content">
+            <div class="mode-selector">
+                <button id="mode-simple-btn" class="mode-btn active" data-i18n="worlds.simpleMode">Simple</button>
+                <button id="mode-advanced-btn" class="mode-btn" data-i18n="worlds.advancedMode">Advanced</button>
+            </div>
+
+            <div class="form-container">
+                <div class="option-item full-width">
+                    <label for="new-world-name" data-i18n="worlds.newName">Name:</label>
+                    <input type="text" id="new-world-name" class="option-select" placeholder="e.g. Neon City" maxlength="30">
+                </div>
+                <div class="option-item full-width">
+                    <label for="new-world-prompt" data-i18n="worlds.newPrompt">Concept Prompt:</label>
+                    <textarea id="new-world-prompt" class="option-select medium-textarea" placeholder="Describe the world's atmosphere, rules, and dangers..."></textarea>
+                </div>
+
+                <div class="option-item full-width">
+                    <label for="new-world-objective" data-i18n="worlds.newObjective">World Objective / Win Condition:</label>
+                    <textarea id="new-world-objective" class="option-select small-textarea" placeholder="Describe how the player wins (e.g., Find the ancient relic, escape the city, defeat the overlord...)"></textarea>
+                </div>
+
+                <!-- Advanced Fields -->
+                <div id="advanced-fields" class="hidden">
+                    <div class="advanced-category-grid">
+                        <button type="button" class="category-card" data-category="items">
+                            <span class="category-icon">🎒</span>
+                            <span class="category-name" data-i18n="adv.items">Items</span>
+                            <span class="category-count" id="count-items">0</span>
+                        </button>
+                        <button type="button" class="category-card" data-category="locations">
+                            <span class="category-icon">📍</span>
+                            <span class="category-name" data-i18n="adv.locations">Locations</span>
+                            <span class="category-count" id="count-locations">0</span>
+                        </button>
+                        <button type="button" class="category-card" data-category="characters">
+                            <span class="category-icon">👥</span>
+                            <span class="category-name" data-i18n="adv.characters">Characters</span>
+                            <span class="category-count" id="count-characters">0</span>
+                        </button>
+                        <button type="button" class="category-card" data-category="rules">
+                            <span class="category-icon">📜</span>
+                            <span class="category-name" data-i18n="adv.rules">Lore & Rules</span>
+                            <span class="category-count" id="count-rules">0</span>
+                        </button>
+                        <button type="button" class="category-card" data-category="stats">
+                            <span class="category-icon">📊</span>
+                            <span class="category-name" data-i18n="adv.stats">Custom Stats</span>
+                            <span class="category-count" id="count-stats">0</span>
+                        </button>
+                    </div>
+                    
+                    <div class="option-item full-width" style="margin-top: 20px;">
+                        <label>VR Hand Color:</label>
+                        <div class="custom-color-picker" id="create-hand-color-picker">
+                            <div class="color-presets">
+                                <div class="color-swatch" style="background: #444444;" data-color="#444444"></div>
+                                <div class="color-swatch" style="background: #888888;" data-color="#888888"></div>
+                                <div class="color-swatch" style="background: #ffffff;" data-color="#ffffff"></div>
+                                <div class="color-swatch" style="background: #ff00ff;" data-color="#ff00ff"></div>
+                                <div class="color-swatch" style="background: #00f3ff;" data-color="#00f3ff"></div>
+                                <div class="color-swatch" style="background: #ff4d4d;" data-color="#ff4d4d"></div>
+                                <div class="color-swatch" style="background: #43e660;" data-color="#43e660"></div>
+                                <div class="color-swatch" style="background: #000000;" data-color="#000000"></div>
+                            </div>
+                            <div class="color-input-wrapper">
+                                <div class="color-preview" id="create-hand-color-preview" style="background: #444444;"></div>
+                                <input type="text" id="new-world-vr-hand-color" value="#444444" maxlength="7" placeholder="#HEX">
+                            </div>
+                        </div>
+                        <span class="option-description">Customize the appearance of the player's physical hands in Virtual Reality.</span>
+                    </div>
+
+                </div>
+
+                <div class="option-item full-width">
+                    <label for="new-world-music" data-i18n="worlds.worldMusic">World Music (Optional):</label>
+                    <input type="file" id="new-world-music" class="option-select" accept="audio/*">
+                    <span class="option-description" data-i18n="worlds.musicHint">Upload an MP3/WAV to set the world's theme.</span>
+                </div>
+                
+            </div>
+            <div class="menu-buttons horizontal">
+                <button id="confirm-create-world-btn" class="menu-button" data-i18n="worlds.createButton">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="world-config-menu" class="full-screen-menu hidden">
+        <div class="menu-header-row">
+            <h3 id="config-world-title">World Config</h3>
+            <button id="close-world-config-btn" class="back-circle-btn" title="Back">×</button>
+        </div>
+        <div class="menu-content">
+            <!-- View 1: Saves List (when clicked normally) -->
+            <div id="config-saves-view" class="hidden" style="width: 100%;">
+                <div class="saves-header">
+                    <h4 data-i18n="worlds.adventureSaves">Adventure Saves</h4>
+                    <button id="new-save-btn" class="menu-button small">
+                        <span class="btn-icon">+</span> <span data-i18n="worlds.newSave">New Adventure</span>
+                    </button>
+                </div>
+                <div id="world-saves-list" class="saves-grid-container">
+                    <!-- Saves for this world will be listed here -->
+                </div>
+            </div>
+
+            <!-- View 2: Full Edit Form (when clicked 'Edit') -->
+            <div id="config-edit-view" class="hidden">
+                <div class="mode-selector">
+                    <button id="edit-mode-simple-btn" class="mode-btn active">Simple</button>
+                    <button id="edit-mode-advanced-btn" class="mode-btn">Advanced</button>
+                </div>
+
+                <div class="form-container">
+                    <div class="option-item full-width">
+                        <label for="edit-world-name" data-i18n="worlds.newName">Name:</label>
+                        <input type="text" id="edit-world-name" class="option-select" data-i18n-placeholder="worlds.namePlaceholder" placeholder="e.g. Neon City" maxlength="30">
+                    </div>
+                    <div class="option-item full-width">
+                        <label for="edit-world-prompt" data-i18n="worlds.newPrompt">Concept Prompt:</label>
+                        <textarea id="edit-world-prompt" class="option-select medium-textarea" data-i18n-placeholder="worlds.promptPlaceholder" placeholder="Describe the world..."></textarea>
+                    </div>
+
+                    <div class="option-item full-width">
+                        <label for="edit-world-objective" data-i18n="worlds.newObjective">World Objective / Win Condition:</label>
+                        <textarea id="edit-world-objective" class="option-select small-textarea" data-i18n-placeholder="worlds.winConditionPlaceholder" placeholder="How do they win?"></textarea>
+                    </div>
+
+                    <!-- Advanced Fields -->
+                    <div id="edit-advanced-fields" class="hidden">
+                        <div class="advanced-category-grid">
+                            <button type="button" class="category-card" data-category="items">
+                                <span class="category-icon">🎒</span>
+                                <span class="category-name" data-i18n="adv.items">Items</span>
+                                <span class="category-count" id="edit-count-items">0</span>
+                            </button>
+                            <button type="button" class="category-card" data-category="locations">
+                                <span class="category-icon">📍</span>
+                                <span class="category-name" data-i18n="adv.locations">Locations</span>
+                                <span class="category-count" id="edit-count-locations">0</span>
+                            </button>
+                            <button type="button" class="category-card" data-category="characters">
+                                <span class="category-icon">👥</span>
+                                <span class="category-name" data-i18n="adv.characters">Characters</span>
+                                <span class="category-count" id="edit-count-characters">0</span>
+                            </button>
+                            <button type="button" class="category-card" data-category="rules">
+                                <span class="category-icon">📜</span>
+                                <span class="category-name" data-i18n="adv.rules">Lore & Rules</span>
+                                <span class="category-count" id="edit-count-rules">0</span>
+                            </button>
+                            <button type="button" class="category-card" data-category="stats">
+                                <span class="category-icon">📊</span>
+                                <span class="category-name" data-i18n="adv.stats">Custom Stats</span>
+                                <span class="category-count" id="edit-count-stats">0</span>
+                            </button>
+                        </div>
+                        
+                        <div class="option-item full-width" style="margin-top: 20px;">
+                            <label>VR Hand Color:</label>
+                            <div class="custom-color-picker" id="edit-hand-color-picker">
+                                <div class="color-presets">
+                                    <div class="color-swatch" style="background: #444444;" data-color="#444444"></div>
+                                    <div class="color-swatch" style="background: #888888;" data-color="#888888"></div>
+                                    <div class="color-swatch" style="background: #ffffff;" data-color="#ffffff"></div>
+                                    <div class="color-swatch" style="background: #ff00ff;" data-color="#ff00ff"></div>
+                                    <div class="color-swatch" style="background: #00f3ff;" data-color="#00f3ff"></div>
+                                    <div class="color-swatch" style="background: #ff4d4d;" data-color="#ff4d4d"></div>
+                                    <div class="color-swatch" style="background: #43e660;" data-color="#43e660"></div>
+                                    <div class="color-swatch" style="background: #000000;" data-color="#000000"></div>
+                                </div>
+                                <div class="color-input-wrapper">
+                                    <div class="color-preview" id="edit-hand-color-preview" style="background: #444444;"></div>
+                                    <input type="text" id="edit-world-vr-hand-color" value="#444444" maxlength="7" placeholder="#HEX">
+                                </div>
+                            </div>
+                            <span class="option-description">Customize the appearance of the player's physical hands in Virtual Reality.</span>
+                        </div>
+
+                    </div>
+
+                    <div class="option-item full-width">
+                        <label for="edit-world-music" data-i18n="worlds.worldMusic">World Music (Optional):</label>
+                        <input type="file" id="edit-world-music" class="option-select" accept="audio/*">
+                        <div id="current-music-info" class="option-description" style="margin-top: 5px;">No custom music set.</div>
+                    </div>
+
+                    <div class="option-item full-width">
+                        <label for="world-thumbnail-input" data-i18n="worlds.thumbnailLabel">Thumbnail (Optional - used for Gallery)</label>
+                        <input type="file" id="world-thumbnail-input" class="option-select" accept="image/*">
+                        <div id="edit-thumbnail-preview-container" class="hidden" style="margin-top: 10px; width: 100%; text-align: center;">
+                            <img id="edit-thumbnail-preview" src="" style="max-width: 200px; border-radius: 8px; border: 1px solid #555; object-fit: cover; aspect-ratio: 16/9;" crossorigin="anonymous">
+                        </div>
+                        <span class="option-description" data-i18n="worlds.thumbnailHint">If you don't upload one, an AI-generated thumbnail will be created automatically when the world is saved.</span>
+                    </div>
+
+                </div>
+
+                <div class="menu-buttons horizontal" style="margin-top: 30px;">
+                    <button id="save-world-config-btn" class="menu-button" data-i18n="worlds.saveChanges">Save Changes</button>
+                    <button id="share-world-btn" class="menu-button" style="background: linear-gradient(135deg, #ff00ff 0%, #aa00ff 100%);" data-i18n="worlds.shareOnline">Share Online</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-container" class="container hidden">
+        <h1 id="game-title" class="hidden">AI World Maker</h1>
+        
+        <div id="immersive-toast-container" class="immersive-toast-container"></div>
+
+
+
+        <!-- NEW: Return to Main Menu Button -->
+        <button id="return-to-menu-btn" class="return-to-menu-button"><img src="menu.png" alt="Main Menu" class="menu-icon" crossorigin="anonymous"></button>
+        
+        <div class="game-area">
+            <div id="immersive-toggles" class="immersive-toggles">
+                <button id="toggle-log-btn" class="imm-toggle-btn" data-i18n-title="game.toggleLog" title="Toggle Narrative Log">📜 <span data-i18n="game.log">LOG</span></button>
+                <button id="toggle-inv-btn" class="imm-toggle-btn" data-i18n-title="game.toggleInv" title="Toggle Inventory">🎒 <span data-i18n="game.inventory">INVENTORY</span></button>
+            </div>
+            <div id="main-content-display" class="main-content-display">
+                <div id="image-display" class="image-display">
+                    <!-- Image will be dynamically loaded here by script.js -->
+                    <div id="panorama-container" class="hidden"></div>
+                    <img id="current-scene-image" alt="World Scene" src="" crossorigin="anonymous">
+                    <canvas id="swipe-canvas"></canvas>
+                    <!-- NEW: Replace button with clickable image -->
+                    <img id="graphic-content-warning" class="graphic-content-warning hidden" src="graphiccontent.png" alt="Graphic content warning" style="cursor: pointer;" crossorigin="anonymous">
+                </div>
+                <div id="text-output" class="text-output">
+                    <!-- Initial narrative and subsequent text content will be dynamically loaded here -->
+                </div>
+            </div>
+            <div id="inventory-container" class="inventory-container">
+                <!-- Top Half: Inventory Items -->
+                <div class="inventory-section">
+                    <h2 data-i18n="game.inventory">Inventory</h2>
+                    <ul id="inventory-list" class="inventory-list">
+                        <!-- Inventory items will be rendered here -->
+                    </ul>
+                </div>
+                <!-- Bottom Half: Stats -->
+                <div class="stats-section">
+                    <h2 data-i18n="game.stats">Stats</h2>
+                    <div id="stats-display-area">
+                        <!-- Stats will be rendered here dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        <form id="input-form" class="input-form">
+            <input type="text" id="user-input" data-i18n-placeholder="game.placeholder" placeholder="What do you do?" autocomplete="off">
+            <button type="submit" id="act-button" data-i18n="game.act">Act</button>
+            <button type="button" id="enter-vr-btn" class="menu-button compact hidden" style="min-width: auto; padding: 0 15px; background: linear-gradient(135deg, #ff00ff 0%, #7700ff 100%); color: white; border: none;">
+                <span class="btn-icon">🥽</span>
+                <span class="btn-text">VR</span>
+            </button>
+        </form>
+        <div id="loading" class="loading hidden">Loading...</div>
+
+        <!-- NEW: VHS Effect Wrapper and Canvas - Moved inside game-container -->
+        
+    </div>
+    <script type="importmap">
+        {
+          "imports": {
+            "jszip": "https://esm.sh/jszip@3.10.1",
+            "three": "https://esm.sh/three@0.160.0"
+          }
+        }
+    </script>
+    <div id="online-worlds-menu" class="full-screen-menu hidden">
+        <div class="menu-header-row">
+            <h3>Online Gallery</h3>
+            <button id="close-online-menu-btn" class="back-circle-btn" title="Back">×</button>
+        </div>
+        <div class="menu-content wide">
+            <div class="online-controls">
+                <input type="text" id="online-search" class="option-select" placeholder="Search worlds by name or creator..." data-i18n-placeholder="gallery.searchPlaceholder">
+                <button id="open-gallery-filters-btn" class="menu-button compact" style="min-width: auto; padding: 0 25px; border-radius: 12px; height: 50px;">
+                    <span class="btn-icon">🔍</span> <span data-i18n="gallery.filtersBtn">Filters</span>
+                </button>
+                <div class="sort-controls">
+                    <div class="custom-select-wrapper" style="width: auto;">
+                        <select id="online-sort" class="option-select">
+                            <option value="date" data-i18n="gallery.sortDate">Sort: Date</option>
+                            <option value="rating" selected data-i18n="gallery.sortRating">Sort: Rating</option>
+                            <option value="plays" data-i18n="gallery.sortPlays">Sort: Plays</option>
+                            <option value="name" data-i18n="gallery.sortName">Sort: Name</option>
+                        </select>
+                    </div>
+                    <div class="custom-select-wrapper" style="width: auto;">
+                        <select id="online-order" class="option-select">
+                            <option value="desc" data-i18n="gallery.orderDesc">Descending</option>
+                            <option value="asc" data-i18n="gallery.orderAsc">Ascending</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div id="online-worlds-list" class="online-list-container">
+                <!-- Shared worlds will be listed here -->
+            </div>
+
+        </div>
+    </div>
+
+    <!-- World Details View (Online) -->
+    <div id="online-world-details" class="full-screen-menu hidden" style="z-index: 3005;">
+        <div class="menu-header-row">
+            <h3 id="online-detail-name">World Name</h3>
+            <button id="close-online-details-btn" class="back-circle-btn" title="Back">×</button>
+        </div>
+        <div class="menu-content wide">
+            <div class="details-layout">
+                <div class="details-main-info">
+                    <div class="details-thumbnail-wrapper">
+                        <img id="online-detail-thumbnail" class="details-hero-image" src="" style="display:none;" crossorigin="anonymous">
+                    </div>
+                    
+                    <div class="details-header-card">
+                        <div class="details-meta-info">
+                            <div style="display: flex; flex-direction: column; gap: 5px;">
+                                <span id="online-detail-creator" class="creator-badge" data-i18n="gallery.by">By: User</span>
+                                <span id="online-detail-plays" style="font-size: 0.8em; color: #888; font-weight: bold; letter-spacing: 1px;" data-i18n="gallery.plays">PLAYS: 0</span>
+                            </div>
+                            <button id="copy-world-id-btn" class="world-action-btn" style="font-size: 0.7em; padding: 5px 10px;" data-i18n="gallery.copyId">Copy World ID</button>
+                        </div>
+                        <div class="details-actions-row">
+                            <div class="feedback-group">
+                                <button id="like-btn" class="feedback-btn">👍 <span id="like-count">0</span></button>
+                                <button id="dislike-btn" class="feedback-btn">👎 <span id="dislike-count">0</span></button>
+                            </div>
+                            <div class="primary-btns-group">
+                                <button id="mod-banish-btn" class="world-action-btn hidden" style="color: #ff4d4d;" data-i18n="gallery.banish">Banish</button>
+                                <button id="mod-feature-btn" class="world-action-btn hidden" style="color: #ffd700;" data-i18n="gallery.feature">Feature</button>
+                                <button id="report-world-btn" class="menu-button small danger" data-i18n="gallery.report">Report</button>
+                                <button id="play-shared-world-btn" class="menu-button" data-i18n="gallery.downloadPlay">Download & Play</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="details-description-card">
+                        <label data-i18n="gallery.worldConcept">WORLD CONCEPT</label>
+                        <p id="online-detail-prompt">World description goes here...</p>
+                    </div>
+                </div>
+
+                <div class="details-sidebar">
+                    <div class="comment-section-modern">
+                        <div class="comment-header">
+                            <h4 data-i18n="gallery.comments">COMMENTS</h4>
+                        </div>
+                        <div id="comments-list" class="comments-list-modern">
+                            <!-- Comments will be injected here -->
+                        </div>
+                        <div class="comment-input-modern">
+                            <textarea id="new-comment-input" data-i18n-placeholder="gallery.commentPlaceholder" placeholder="Add your thought..." maxlength="150"></textarea>
+                            <button id="post-comment-btn" class="post-btn" data-i18n="gallery.commentSend">SEND</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="advanced-detail-menu" class="full-screen-menu hidden">
+        <div class="menu-header-row">
+            <h3 id="adv-detail-title" data-i18n="adv.editItems">Edit Items</h3>
+            <button id="close-adv-detail-btn" class="back-circle-btn" data-i18n-title="main.back" title="Back">×</button>
+        </div>
+        <div class="menu-content">
+            <div class="form-container">
+                <div class="builder-controls center">
+                    <button id="sub-adv-open-modal-btn" class="menu-button" data-i18n="adv.addNew">Add New</button>
+                </div>
+                <div class="option-item full-width">
+                    <label for="sub-adv-search" data-i18n="adv.search">Search:</label>
+                    <input type="text" id="sub-adv-search" class="option-select" data-i18n-placeholder="adv.filterPlaceholder" placeholder="Filter list...">
+                </div>
+                <div id="sub-adv-list-container" class="adv-list-container large-list">
+                    <!-- Items for specific category -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+    <!-- Advanced Entry Popup Modal - Redone -->
+    <!-- Share Online Modal -->
+    <div id="share-online-modal" class="entry-modal-overlay hidden">
+        <div class="entry-modal-card">
+            <div class="entry-modal-header">
+                <span class="entry-header-icon">🌐</span>
+                <h3 data-i18n="share.title">Share World Online</h3>
+            </div>
+            <div class="entry-modal-body">
+                <p style="font-size: 0.9em; color: #ccc; margin-bottom: 15px;" data-i18n="share.subtitle">Publish your world to the Online Gallery for others to discover and play.</p>
+                
+                <div class="entry-field">
+                    <label data-i18n="worlds.thumbnailLabel">Thumbnail: (moved to World Config)</label>
+                    <div style="font-size:0.9em; color:#999;">Upload or AI-generate a thumbnail from the World Configuration panel before sharing.</div>
+                    <div style="height:12px;"></div>
+                    <div id="share-thumbnail-preview-container" class="hidden" style="margin-top: 10px; text-align: center; position: relative;">
+                        <div id="thumbnail-loading-overlay" class="hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; border-radius: 8px; z-index: 5;">
+                            <span style="font-size: 0.8em; color: #00f3ff;">Generating...</span>
+                        </div>
+                        <img id="share-thumbnail-preview" src="" style="max-width: 100%; height: 120px; border-radius: 8px; border: 1px solid #555; object-fit: cover;" crossorigin="anonymous">
+                    </div>
+                </div>
+
+                <div class="entry-field" style="flex-direction: row; align-items: center; gap: 15px; margin-top: 5px;">
+                    <input type="checkbox" id="share-include-saves" style="width: 22px; height: 22px; cursor: pointer;">
+                    <label for="share-include-saves" style="cursor: pointer; text-transform: none; letter-spacing: 0;" data-i18n="share.includeSaves">Include my adventure saves in the upload</label>
+                </div>
+            </div>
+            <div class="entry-modal-footer">
+                <button id="unshare-world-btn" class="entry-btn secondary hidden" style="background-color: #ff4d4d; margin-right: auto;" data-i18n="share.unshare">Unupload World</button>
+                <button id="confirm-share-btn" class="entry-btn primary" data-i18n="share.upload">Upload to Gallery</button>
+                <button id="cancel-share-btn" class="entry-btn secondary" data-i18n="main.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exit Editor Confirmation Modal -->
+    <div id="exit-editor-modal" class="entry-modal-overlay hidden" style="z-index: 6050;">
+        <div class="entry-modal-card">
+            <div class="entry-modal-header">
+                <span class="entry-header-icon">⚠️</span>
+                <h3 id="exit-modal-title">Exit Editor?</h3>
+            </div>
+            <div class="entry-modal-body">
+                <p style="color: #ccc; text-align: center; margin: 0 0 10px 0;">You have unsaved changes in the world editor. What would you like to do?</p>
+            </div>
+            <div class="entry-modal-footer" style="flex-direction: column; gap: 15px; padding-top: 15px;">
+                <button id="exit-save-quit-btn" class="menu-button" style="width: 100%; height: 54px; background: linear-gradient(135deg, #00f3ff 0%, #0077ff 100%); color: #050508; border: none; border-radius: 12px; font-weight: 900; letter-spacing: 1px; box-shadow: 0 8px 20px rgba(0, 243, 255, 0.2);">SAVE & EXIT PROTOCOL</button>
+                <button id="exit-quit-no-save-btn" class="menu-button secondary" style="width: 100%; height: 50px; background: rgba(255, 77, 77, 0.1); border: 1px solid rgba(255, 77, 77, 0.4); color: #ff4d4d; border-radius: 12px; font-weight: 800;">ABANDON CHANGES</button>
+                <button id="exit-cancel-btn" class="menu-button small" style="width: 100%; height: 44px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #999; border-radius: 12px;">RESUME EDITING</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Final Exit Confirmation (Double check) -->
+    <div id="exit-really-sure-modal" class="entry-modal-overlay hidden" style="z-index: 6100;">
+        <div class="entry-modal-card" style="max-width: 380px;">
+            <div class="entry-modal-header" style="background: rgba(255, 77, 77, 0.1);">
+                <span class="entry-header-icon" style="color: #ff4d4d;">🔥</span>
+                <h3 style="color: #ff4d4d; font-size: 1.4em;">Are you really sure?</h3>
+            </div>
+            <div class="entry-modal-body">
+                <p style="color: #fff; text-align: center; font-weight: bold; margin: 0;">All unsaved configuration changes will be PERMANENTLY LOST.</p>
+            </div>
+            <div class="entry-modal-footer" style="gap: 15px;">
+                <button id="exit-final-quit-btn" class="entry-btn" style="background: linear-gradient(135deg, #ff4d4d 0%, #b30000 100%); color: #fff; flex: 1; height: 50px; font-weight: 900; box-shadow: 0 8px 20px rgba(255, 77, 77, 0.2);">CONFIRM PURGE</button>
+                <button id="exit-final-cancel-btn" class="entry-btn secondary" style="flex: 1; height: 50px; background: #333; border: 1px solid #555; color: #ccc;">GO BACK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Modal -->
+    <div id="progress-modal" class="entry-modal-overlay hidden" style="z-index: 7000;">
+        <div class="entry-modal-card" style="max-width: 400px;">
+            <div class="entry-modal-header">
+                <span class="entry-header-icon">🔄</span>
+                <h3 id="progress-title" data-i18n="progress.processing">Processing...</h3>
+            </div>
+            <div class="entry-modal-body" style="padding-top: 10px; align-items: center;">
+                <p id="progress-status" style="font-size: 0.9em; color: #ccc; margin-bottom: 15px; text-align: center; width: 100%;" data-i18n="progress.statusPreparing">Preparing world data...</p>
+                <div class="stat-bar-container" style="height: 12px; background-color: #1a1a1a; border: 1px solid #444; width: 100%;">
+                    <div id="progress-bar" class="stat-bar" style="width: 0%; background-color: #00f3ff; transition: width 0.1s ease;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="shadow-realm-menu" class="full-screen-menu hidden">
+        <div class="menu-header-row">
+            <h3 data-i18n="shadow.title">Shadow Realm</h3>
+            <button id="shadow-realm-close-btn" class="back-circle-btn">×</button>
+        </div>
+        <div class="menu-content wide">
+            <p style="text-align: center; color: #ff4d4d; font-weight: bold; margin-bottom: 10px;" data-i18n="shadow.subtitle">BANISHED CONCEPTS • VISIBLE ONLY TO THE OVERSEER</p>
+            
+            <div class="online-controls shadow-controls" style="margin-bottom: 30px;">
+                <div class="option-card" style="flex-direction: row; align-items: center; gap: 15px; padding: 15px 25px; min-width: auto; border-color: rgba(255, 77, 77, 0.4); background: rgba(255, 0, 0, 0.05);">
+                    <input type="checkbox" id="reveal-shadow-thumbnails" style="width: 22px; height: 22px; cursor: pointer; accent-color: #ff4d4d;">
+                    <label for="reveal-shadow-thumbnails" style="cursor: pointer; color: #ff4d4d; font-weight: 900; margin: 0; letter-spacing: 1px;" data-i18n="shadow.reveal">REVEAL BANISHED VISUALS</label>
+                </div>
+            </div>
+
+            <div id="shadow-worlds-list" class="online-list-container">
+                <!-- Banished worlds will appear here -->
+            </div>
+        </div>
+    </div>
+
+    <div id="reports-menu" class="full-screen-menu hidden">
+        <div class="menu-header-row">
+            <h3 data-i18n="reports.title">World Reports</h3>
+            <button id="reports-close-btn" class="back-circle-btn">×</button>
+        </div>
+        <div class="menu-content wide">
+            <p style="text-align: center; color: #ffb700; font-weight: bold; margin-bottom: 10px;" data-i18n="reports.subtitle">PENDING REVIEWS • BREACH OF CONDUCT LOGS</p>
+            <div id="reports-list" class="online-list-container">
+                <!-- Reports will appear here -->
+            </div>
+        </div>
+    </div>
+
+    <div id="player-search-menu" class="full-screen-menu hidden">
+        <div class="menu-header-row">
+            <h3 data-i18n="playerSearch.title">Player Search</h3>
+            <button id="player-search-close-btn" class="back-circle-btn">×</button>
+        </div>
+        <div class="menu-content wide">
+            <div class="online-controls">
+                <input type="text" id="player-search-input" class="option-select" placeholder="Search by username..." data-i18n-placeholder="playerSearch.placeholder">
+                <div class="sort-controls">
+                    <label for="player-search-sort" data-i18n="playerSearch.sortLabel">Sort:</label>
+                    <div class="custom-select-wrapper" style="width: auto;">
+                        <select id="player-search-sort" class="option-select">
+                            <option value="worlds" selected data-i18n="playerSearch.sortWorlds">Worlds</option>
+                            <option value="victories" data-i18n="playerSearch.sortVictories">Victories</option>
+                            <option value="username" data-i18n="playerSearch.sortUsername">Username</option>
+                        </select>
+                    </div>
+                    <div class="custom-select-wrapper" style="width: auto;">
+                        <select id="player-search-order" class="option-select">
+                            <option value="desc" data-i18n="gallery.orderDesc">Descending</option>
+                            <option value="asc" data-i18n="gallery.orderAsc">Ascending</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div id="players-list" class="online-list-container">
+                <!-- Players will be listed here -->
+            </div>
+        </div>
+    </div>
+
+    <div id="user-profile-menu" class="full-screen-menu hidden" style="z-index: 3010;">
+        <div class="menu-header-row">
+            <h3 id="profile-title" data-i18n="profile.title">User Profile</h3>
+            <button id="close-profile-btn" class="back-circle-btn" title="Back">×</button>
+        </div>
+        <div class="menu-content wide">
+            <div class="profile-header">
+                <img id="profile-avatar" src="" class="profile-hero-avatar" crossorigin="anonymous">
+                <div class="profile-info-text">
+                    <h2 id="profile-username">Username</h2>
+                    <p id="profile-stats-summary">Uploaded 0 Worlds</p>
+                </div>
+            </div>
+            
+            <div class="profile-section-title">
+                <h4 data-i18n="profile.contributions">GALLERY CONTRIBUTIONS</h4>
+            </div>
+
+            <div id="profile-worlds-list" class="online-list-container">
+                <!-- User's worlds will appear here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- World Roulette Modal -->
+    <div id="roulette-modal" class="entry-modal-overlay hidden">
+        <div class="entry-modal-card">
+            <div class="entry-modal-header">
+                <span class="entry-header-icon">🎲</span>
+                <h3 data-i18n="main.worldRoulette">World Roulette</h3>
+            </div>
+            <div class="entry-modal-body">
+                <p style="font-size: 0.9em; color: #ccc; margin-bottom: 15px;" data-i18n="roulette.subtitle">Target a random adventure across the digital frontier.</p>
+                <div class="entry-field">
+                    <label data-i18n="roulette.complexityLabel">Complexity Filter</label>
+                    <div class="custom-select-wrapper">
+                        <select id="roulette-filter-complexity" class="option-select">
+                            <option value="any" data-i18n="roulette.complexityAny">Any Complexity</option>
+                            <option value="simple" data-i18n="roulette.complexitySimple">Simple Worlds Only</option>
+                            <option value="advanced" data-i18n="roulette.complexityAdvanced">Advanced Worlds Only</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="entry-field">
+                    <label data-i18n="roulette.ratingLabel">Min Rating Filter</label>
+                    <div class="custom-select-wrapper">
+                        <select id="roulette-filter-rating" class="option-select">
+                            <option value="-999" data-i18n="roulette.ratingAny">Any Rating</option>
+                            <option value="1" data-i18n="roulette.ratingPositive">Positive (+1)</option>
+                            <option value="5" data-i18n="roulette.ratingGood">Good (+5)</option>
+                            <option value="15" data-i18n="roulette.ratingLegendary">Legendary (+15)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="entry-modal-footer">
+                <button id="confirm-roulette-btn" class="entry-btn primary" style="background: linear-gradient(135deg, #00f3ff, #ff00ff); color: #fff;" data-i18n="roulette.spin">INITIATE SPIN</button>
+                <button id="cancel-roulette-btn" class="entry-btn secondary" data-i18n="roulette.abort">ABORT</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="embed-menu" class="full-screen-menu hidden">
+        <div class="menu-header-row">
+            <h3>?</h3>
+            <button id="embed-close-btn" class="back-circle-btn">×</button>
+        </div>
+        <div class="menu-content wide" style="height: calc(100% - 150px); padding: 20px; box-sizing: border-box;">
+            <div style="width: 100%; height: 100%; border: 2px solid #00f3ff; border-radius: 12px; overflow: hidden; box-shadow: 0 0 30px rgba(0, 243, 255, 0.2);">
+                <iframe src='https://www.gamenora.com/embed/ultrakill-prelude' style='width:100%;height:100%;' frameborder='0' allow="pointer-lock; fullscreen; autoplay; keyboard-lock" allowfullscreen></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- Maintenance Data Viewer Modal -->
+    <div id="maintenance-viewer-modal" class="entry-modal-overlay hidden" style="z-index: 8000;">
+        <div class="entry-modal-card" style="max-width: 800px; width: 95%;">
+            <div class="entry-modal-header">
+                <span class="entry-header-icon">📂</span>
+                <h3 id="maintenance-viewer-title">File: data.json</h3>
+            </div>
+            <div class="entry-modal-body">
+                <p id="maintenance-viewer-desc" style="font-size: 0.85em; color: #888; margin-bottom: 10px;">Raw JSON data of the selected directory.</p>
+                <textarea id="maintenance-viewer-content" readonly style="height: 400px; font-family: monospace; font-size: 0.8em; background: #111; color: #00f3ff; border-color: #333;"></textarea>
+            </div>
+            <div class="entry-modal-footer">
+                <button id="maintenance-copy-btn" class="entry-btn primary">Copy to Clipboard</button>
+                <button id="maintenance-viewer-close-btn" class="entry-btn secondary" data-i18n="main.back">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="advanced-entry-modal" class="entry-modal-overlay hidden">
+        <div class="entry-modal-card">
+            <div class="entry-modal-header">
+                <span id="entry-modal-icon" class="entry-header-icon">🎒</span>
+                <h3 id="entry-modal-title" data-i18n="adv.addNew">Add New Item</h3>
+            </div>
+            <div class="entry-modal-body">
+                <div class="entry-field">
+                    <label for="entry-name" id="entry-name-label" data-i18n="adv.name">Name</label>
+                    <input type="text" id="entry-name" data-i18n-placeholder="adv.namePlaceholder" placeholder="Enter name...">
+                </div>
+                <div class="entry-field">
+                    <label for="entry-description" id="entry-desc-label" data-i18n="adv.description">Description</label>
+                    <textarea id="entry-description" data-i18n-placeholder="adv.descPlaceholder" placeholder="Enter details..."></textarea>
+                </div>
+                <div class="entry-field" id="entry-image-field">
+                    <label for="entry-image-input" data-i18n="adv.customIcon">Custom Icon (Optional)</label>
+                    <input type="file" id="entry-image-input" accept="image/*">
+                    <div id="entry-image-preview-container" class="hidden" style="margin-top: 10px; text-align: center;">
+                        <img id="entry-image-preview" src="" style="width: 80px; height: 80px; border-radius: 8px; border: 1px solid #555; object-fit: cover;" crossorigin="anonymous">
+                    </div>
+                </div>
+                <div class="entry-field hidden" id="entry-location-music-field">
+                    <label for="entry-location-music-input" data-i18n="adv.locationTheme">Location Theme (Optional)</label>
+                    <input type="file" id="entry-location-music-input" accept="audio/*">
+                    <div id="entry-location-music-info" class="option-description" style="margin-top: 5px; color: #00f3ff; font-weight: bold;"></div>
+                </div>
+                <div class="entry-field hidden" id="entry-voice-field">
+                    <label for="entry-voice-select" data-i18n="adv.voiceType">Voice Type (AI Voice Acting)</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <div class="custom-select-wrapper" style="flex-grow: 1;">
+                            <select id="entry-voice-select" class="option-select">
+                                <option value="auto">AI Choice (Recommended)</option>
+                            <option value="en-male">English Male</option>
+                            <option value="en-female">English Female</option>
+                            <option value="es-male">Spanish Male</option>
+                            <option value="es-female">Spanish Female</option>
+                            <option value="fr-male">French Male</option>
+                            <option value="fr-female">French Female</option>
+                            <option value="de-male">German Male</option>
+                            <option value="de-female">German Female</option>
+                            <option value="it-male">Italian Male</option>
+                            <option value="it-female">Italian Female</option>
+                            <option value="pNInz6obpgDQGcFmaJgB">Adam (Classic Male)</option>
+                                <option value="EXAVITQu4vr4xnSDxMaL">Bella (Classic Female)</option>
+                            </select>
+                        </div>
+                        <button id="preview-voice-btn" class="menu-button small" style="min-width: 50px; height: 48px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 1.2em;" data-i18n-title="adv.voicePreview" title="Preview Voice">🔊</button>
+                    </div>
+                    <p class="option-description" data-i18n="adv.voiceDesc">Used when this character speaks in dialogue.</p>
+                </div>
+                <div id="entry-stat-fields" class="hidden">
+                    <div style="display: flex; gap: 15px;">
+                        <div class="entry-field" style="flex: 1;">
+                            <label for="entry-stat-value" data-i18n="adv.startingValue">Starting Value (%)</label>
+                            <input type="number" id="entry-stat-value" min="0" max="1000" value="100">
+                        </div>
+                        <div class="entry-field" style="flex: 1;">
+                            <label for="entry-stat-color" data-i18n="adv.barColor">Bar Color</label>
+                            <input type="color" id="entry-stat-color" value="#00f3ff" style="height: 48px; padding: 2px; cursor: pointer;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="entry-modal-footer">
+                <button id="entry-save-btn" class="entry-btn primary" data-i18n="adv.saveEntry">Save Entry</button>
+                <button id="entry-cancel-btn" class="entry-btn secondary" data-i18n="main.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gallery Filters Modal -->
+    <div id="gallery-filters-modal" class="entry-modal-overlay hidden">
+        <div class="entry-modal-card" style="max-width: 450px;">
+            <div class="entry-modal-header">
+                <span class="entry-header-icon">🔍</span>
+                <h3 data-i18n="gallery.filtersTitle">Search Filters</h3>
+            </div>
+            <div class="entry-modal-body">
+                <div class="entry-field">
+                    <label data-i18n="gallery.filterImageLabel">Visual Content</label>
+                    <div class="custom-select-wrapper">
+                        <select id="filter-image" class="option-select">
+                            <option value="any" data-i18n="gallery.filterImageAny">All Visuals</option>
+                            <option value="has" data-i18n="gallery.filterImageHas">With Thumbnails</option>
+                            <option value="none" data-i18n="gallery.filterImageNone">No Thumbnails</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="entry-field">
+                    <label data-i18n="gallery.filterComplexityLabel">World Complexity</label>
+                    <div class="custom-select-wrapper">
+                        <select id="filter-complexity" class="option-select">
+                            <option value="any" data-i18n="gallery.filterComplexityAny">All Types</option>
+                            <option value="simple" data-i18n="gallery.filterComplexitySimple">Simple Worlds Only</option>
+                            <option value="advanced" data-i18n="gallery.filterComplexityAdvanced">Advanced Worlds Only</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="entry-field">
+                    <label data-i18n="gallery.filterWordsLabel">Word Count Range (Prompt)</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="number" id="filter-words-min" class="option-select" min="0" value="0" placeholder="Min Words" style="flex: 1;">
+                        <span style="color: #666;">to</span>
+                        <input type="number" id="filter-words-max" class="option-select" min="0" value="0" placeholder="Max (0=∞)" style="flex: 1;">
+                    </div>
+                    <p class="option-description" style="margin-top: 5px; font-size: 0.75rem; opacity: 0.6;" data-i18n="gallery.filterWordsHint">Tip: Set maximum to 0 for no limit.</p>
+                </div>
+            </div>
+            <div class="entry-modal-footer">
+                <button id="apply-filters-btn" class="entry-btn primary" data-i18n="gallery.applyFilters">Apply Filters</button>
+                <button id="close-filters-btn" class="entry-btn secondary" data-i18n="main.back">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- First-Run Language Onboarding Modal -->
+    <div id="language-onboarding" class="entry-modal-overlay hidden">
+        <div class="entry-modal-card">
+            <div class="entry-modal-header">
+                <span class="entry-header-icon">🌐</span>
+                <h3 data-i18n="onboarding.title">Choose Language</h3>
+            </div>
+            <div class="entry-modal-body">
+                <div class="entry-field">
+                    <label for="onboarding-language-select" data-i18n="onboarding.label">Interface Language</label>
+                    <div class="custom-select-wrapper">
+                        <select id="onboarding-language-select" class="option-select">
+                            <option value="en">English</option>
+                            <option value="pt">Português (PT-BR)</option>
+                            <option value="pl">Polski</option>
+                            <option value="ar">العربية</option>
+                            <option value="fil">Filipino</option>
+                            <option value="id">Bahasa Indonesia</option>
+                            <option value="de">Deutsch</option>
+                            <option value="uk">Українська</option>
+                        </select>
+                    </div>
+                </div>
+                <p class="option-description" style="margin-top: 5px;" data-i18n="onboarding.hint">
+                    You can change this later in System Settings.
+                </p>
+            </div>
+            <div class="entry-modal-footer">
+                <button id="onboarding-language-confirm-btn" class="entry-btn primary" data-i18n="onboarding.continue">Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js" type="module"></script>
+
+</body>
+</html>
