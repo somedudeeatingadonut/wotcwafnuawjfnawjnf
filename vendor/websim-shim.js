@@ -866,11 +866,15 @@
             imgSlotAt = Math.max(imgSlotAt, now + 16000);
             return 'degraded';
         }
-        // Network/CORS failure on fetch — remember so future attempts skip
-        // straight to the <img> probe strategy.
-        SHIM.fetchBlocked = true;
-        SHIM.fetchBlockedUntil = now + 300000;
+        // Only a true network-level fetch failure (TypeError: CORS/DNS/refused)
+        // should flip future attempts to the <img> probe strategy. Decode and
+        // HTTP oddities must not mark fetch itself as blocked.
+        if (err && (err instanceof TypeError || err.name === 'TypeError')) {
+            SHIM.fetchBlocked = true;
+            SHIM.fetchBlockedUntil = now + 300000;
+        }
         SHIM.imageMode = 'degraded';
+        imgSlotAt = Math.max(imgSlotAt, now + 16000);
         return 'degraded';
     }
 
@@ -878,12 +882,30 @@
      *  image renders instantly with zero extra network requests — a second
      *  request within seconds would be rejected by the anonymous throttle,
      *  which is exactly what made scene images disappear. */
-    function blobToCappedDataUrl(blob) {
+    function blobToCappedDataUrl(blob, timeoutMs) {
         return new Promise(function (resolve, reject) {
             var objectUrl = null;
-            try { objectUrl = URL.createObjectURL(blob); } catch (e) { reject(e); return; }
+            var done = false;
+            var timer = setTimeout(function () {
+                if (done) return;
+                done = true;
+                try { if (objectUrl) URL.revokeObjectURL(objectUrl); } catch (e) {}
+                reject(new Error('image decode timeout'));
+            }, timeoutMs || 10000);
+            function fail(err) {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                try { if (objectUrl) URL.revokeObjectURL(objectUrl); } catch (e) {}
+                reject(err);
+            }
+            try { objectUrl = URL.createObjectURL(blob); } catch (e) { fail(e); return; }
             var img = new Image();
             img.onload = function () {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                try { URL.revokeObjectURL(objectUrl); } catch (e) {}
                 try {
                     var w = img.naturalWidth || img.width;
                     var h = img.naturalHeight || img.height;
@@ -896,13 +918,10 @@
                     resolve(encodeCapped(canvas));
                 } catch (e) {
                     reject(e);
-                } finally {
-                    try { URL.revokeObjectURL(objectUrl); } catch (e) {}
                 }
             };
             img.onerror = function () {
-                try { URL.revokeObjectURL(objectUrl); } catch (e) {}
-                reject(new Error('failed to decode fetched image'));
+                fail(new Error('failed to decode fetched image'));
             };
             img.src = objectUrl;
         });
@@ -936,7 +955,7 @@
 
         var fetchStep = Promise.resolve(null);
         if (!(SHIM.fetchBlocked && Date.now() < (SHIM.fetchBlockedUntil || 0))) {
-            fetchStep = fetchTimeout(url, {}, 30000, null).then(function (res) {
+            fetchStep = fetchTimeout(url, {}, 40000, null).then(function (res) {
                 if (!res.ok) {
                     var e = new Error('HTTP ' + res.status);
                     e.httpStatus = res.status;
@@ -950,10 +969,17 @@
                 }
                 return res.blob().then(function (blob) {
                     if (!blob || !blob.size) throw new Error('Empty image');
-                    return blobToCappedDataUrl(blob);
+                    // Decode + re-encode so the display step needs zero extra
+                    // network requests (a second request hits the throttle).
+                    // If decoding stalls or fails, the fetch already proved the
+                    // URL is good — hand back the raw URL rather than failing.
+                    return blobToCappedDataUrl(blob, 10000).then(
+                        function (dataUrl) { return dataUrl; },
+                        function () { return url; }
+                    );
                 });
-            }).then(function (dataUrl) {
-                return { url: dataUrl, via: 'fetch' };
+            }).then(function (u) {
+                return { url: u, via: 'fetch' };
             }).catch(function (err) {
                 if (err && err.name === 'AbortError') throw err;
                 var cls = classifyImageFailure(err);
@@ -966,11 +992,11 @@
         return fetchStep.then(function (remote) {
             if (remote) {
                 SHIM.imageMode = 'remote';
-                try { console.info('[websim-shim] remote image generated (fetch, re-encoded)'); } catch (e) {}
+                try { console.info('[websim-shim] remote image generated (fetch' + (String(remote.url).indexOf('data:') === 0 ? ', re-encoded)' : ', raw url)')); } catch (e) {}
                 return remote;
             }
             if (state.throttled) return null; // don't burn a probe on a 429
-            return imageLoadTest(url, 12000).then(function (ok) {
+            return imageLoadTest(url, 20000).then(function (ok) {
                 if (ok) {
                     SHIM.imageMode = 'remote';
                     SHIM.fetchBlocked = true;
@@ -978,8 +1004,11 @@
                     try { console.info('[websim-shim] remote image generated (img probe)'); } catch (e) {}
                     return { url: url, via: 'img' };
                 }
-                SHIM.imageMode = 'down';
-                SHIM.imageRetryAt = Date.now() + 90000;
+                // Slow generation or a blocked request: back off a single slot
+                // (~16s) instead of locking everything out for 90s. Anonymous
+                // pollinations often just needs longer than we waited.
+                SHIM.imageMode = 'degraded';
+                imgSlotAt = Math.max(imgSlotAt, Date.now() + 16000);
                 return null;
             });
         });
@@ -1218,7 +1247,14 @@
             return { url: proceduralImage(prompt, dims) };
         };
 
-        return run().catch(function (err) {
+        // Hard cap: create/settings flows await this — it must always settle.
+        return Promise.race([
+            run(),
+            sleepMs(80000).then(function () {
+                try { console.warn('[websim-shim] imageGen hard timeout; using procedural renderer'); } catch (e) {}
+                return { url: proceduralImage(prompt, dims) };
+            })
+        ]).catch(function (err) {
             // Absolute last resort — still return something renderable.
             try {
                 return { url: proceduralImage(prompt, dims) };

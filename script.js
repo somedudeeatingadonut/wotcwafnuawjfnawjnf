@@ -4608,7 +4608,10 @@ class SaveSystem {
 /* If a saved world has no thumbnail, generate one via AI and assign it to the world record.
    This runs after world creation, updates, and when copying a shared world so every save
    ends up with a thumbnail (if possible). */
+let thumbnailGenInFlight = false;
 async function generateAndAssignThumbnail(worldName) {
+    if (thumbnailGenInFlight) return; // one generation at a time (create + settings can overlap)
+    thumbnailGenInFlight = true;
     try {
         const worlds = SaveSystem.getWorlds();
         const world = worlds[worldName];
@@ -4639,9 +4642,16 @@ async function generateAndAssignThumbnail(worldName) {
                 thumbnailUrl: world.thumbnailUrl
             }, world.name, world.objective || "");
             console.log(`Generated and assigned thumbnail for world: ${world.name}`);
+            try {
+                if (typeof refreshWorldsList === 'function' && worldsMenu && !worldsMenu.classList.contains('hidden')) {
+                    refreshWorldsList();
+                }
+            } catch (e) { /* list may not exist in this view */ }
         }
     } catch (err) {
         console.warn("Automatic thumbnail generation failed for", worldName, err);
+    } finally {
+        thumbnailGenInFlight = false;
     }
 }
 
@@ -5958,8 +5968,9 @@ confirmCreateWorldBtn.addEventListener('click', async () => {
         }
 
         const world = SaveSystem.saveWorld(name, prompt, musicDataUrl, { ...advancedData, version: 2, vrHandColor }, null, objective);
-        // Auto-generate a thumbnail if none is set
-        await generateAndAssignThumbnail(world.name);
+        // Thumbnail generates in the background — the create flow must not
+        // block on remote image generation (it can take tens of seconds).
+        generateAndAssignThumbnail(world.name);
         createWorldMenu.classList.add('hidden');
         openWorldConfig(world, true, worldsMenu); // Show edit fields after creation
     } else {
@@ -6091,7 +6102,8 @@ saveWorldConfigBtn.addEventListener('click', async () => {
         
         // Auto-generate a thumbnail only if one hasn't been manually set
         if (!updatedWorld.thumbnailUrl) {
-            await generateAndAssignThumbnail(updatedWorld.name);
+            // Background: settings UI must confirm immediately.
+            generateAndAssignThumbnail(updatedWorld.name);
         }
 
         currentWorld = updatedWorld;
