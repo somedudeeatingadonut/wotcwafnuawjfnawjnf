@@ -3897,7 +3897,7 @@ async function handlePlayerAction(displayActionText, aiContextActionText, clearP
     let attemptCount = 0;
     const MAX_ATTEMPTS = 3;
     const AI_TIMEOUT_MS = 45000;
-    const IMAGE_GEN_TIMEOUT_MS = 60000;
+    const IMAGE_GEN_TIMEOUT_MS = 85000; // must exceed shim imageGen hard cap (80s)
 
     while (attemptCount < MAX_ATTEMPTS && !attemptSuccessful) {
         attemptCount++;
@@ -4619,7 +4619,7 @@ async function generateAndAssignThumbnail(worldName) {
         if (world.thumbnailUrl) return; // already has one
 
         // Build a concise prompt for thumbnail generation
-        const prompt = `Cinematic thumbnail for a world titled "${world.name}". Theme: ${world.prompt}. High-contrast, evocative, polished art suitable for a gallery thumbnail.`;
+        const prompt = `Cinematic gallery thumbnail for a world titled \"${world.name}\". Theme: ${world.prompt}. Masterpiece quality, high-contrast, evocative, polished digital art, coherent composition, correct anatomy with natural hands and limbs, clean detailed rendering, no artifacts, no distortions, no garbled text.`;
 
         // Request image generation
         const result = await websim.imageGen({

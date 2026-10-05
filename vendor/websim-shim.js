@@ -42,6 +42,13 @@
         imageRetryAt: 0
     };
     G.__wsShim = SHIM;
+    SHIM.log = [];
+    function shimLog(kind, detail) {
+        try {
+            SHIM.log.push(Object.assign({ k: kind, t: Date.now() }, detail || {}));
+            if (SHIM.log.length > 40) SHIM.log.splice(0, SHIM.log.length - 40);
+        } catch (e) {}
+    }
 
     /* ================================================================
      * Utilities
@@ -631,6 +638,8 @@
     ];
 
     function remoteTextAttempt(url, body, signal, ms) {
+        var t0 = Date.now();
+        var tag = url.indexOf('/openai') !== -1 ? 'post-openai' : 'post-bare';
         return fetchTimeout(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -646,6 +655,7 @@
             return res.text();
         }).then(function (text) {
             if (!text || !text.trim()) throw new Error('Empty completion');
+            shimLog('text-' + tag + '-recv', { ms: Date.now() - t0, len: text.length });
             try {
                 var data = JSON.parse(text);
                 if (data && data.choices && data.choices[0]) {
@@ -687,8 +697,8 @@
         }
         function cut(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n) + ' [...]' : s; }
         var out = '';
-        if (sys) out += '[SYSTEM]\n' + cut(sys, 2400) + '\n\n';
-        if (user) out += '[USER]\n' + cut(user, 1500);
+        if (sys) out += '[SYSTEM]\n' + cut(sys, 1400) + '\n\n';
+        if (user) out += '[USER]\n' + cut(user, 900);
         return out.trim();
     }
 
@@ -702,6 +712,7 @@
         if (wantsJson) prompt += '\n\nRespond with ONLY valid JSON. No markdown fences, no commentary.';
         var url = 'https://text.pollinations.ai/' + encodeURIComponent(prompt) +
             '?referrer=ai-world-maker-standalone' + (wantsJson ? '&json=true' : '');
+        var t0 = Date.now();
         return fetchTimeout(url, { method: 'GET' }, 14000, opts && opts.signal).then(function (res) {
             if (!res.ok) {
                 var e = new Error('HTTP ' + res.status);
@@ -714,7 +725,12 @@
         }).then(function (text) {
             if (!text || !text.trim()) throw new Error('Empty completion');
             if (text.trim().charAt(0) === '<') throw new Error('Unexpected HTML response');
+            shimLog('text-get-ok', { ms: Date.now() - t0, len: text.length, urlLen: url.length });
             return text;
+        }).catch(function (err) {
+            if (err && err.name === 'AbortError') throw err;
+            shimLog('text-get-fail', { ms: Date.now() - t0, status: err && err.httpStatus, err: String((err && err.message) || err), urlLen: url.length });
+            throw err;
         });
     }
 
@@ -758,21 +774,29 @@
 
         function runAttempt(i) {
             if (i >= attempts.length) {
+                shimLog('text-all-failed', { postSuspectUntil: SHIM.postSuspectUntil || 0 });
                 return Promise.reject(new Error('All text endpoints failed'));
             }
-            return Promise.resolve().then(attempts[i]).catch(function (err) {
+            var t0 = Date.now();
+            var name = attempts[i].name || ('attempt' + i);
+            return sleepMs(i === 0 ? 0 : 1200).then(function () {
+                return Promise.resolve().then(attempts[i]);
+            }).catch(function (err) {
                 if (err && err.name === 'AbortError') throw err;
+                shimLog('text-attempt-fail', { which: name, ms: Date.now() - t0, status: err && err.httpStatus, err: String((err && err.message) || err) });
                 return runAttempt(i + 1);
             });
         }
 
         return runAttempt(0).then(function (content) {
             SHIM.textMode = 'remote';
+            shimLog('text-remote-ok', {});
             return content;
         }).catch(function (err) {
             if (err && err.name === 'AbortError') throw err;
             var backoff = (err && err.httpStatus === 429) ? 120000 : 90000;
             SHIM.textMode = 'offline';
+            shimLog('text-offline', { backoff: backoff, err: String((err && err.message) || err) });
             SHIM.textRetryAt = Date.now() + backoff;
             try { console.warn('[websim-shim] text API unavailable (' + (err && err.message) + '); using offline director'); } catch (e) {}
             return null;
@@ -949,7 +973,10 @@
     }
 
     function attemptRemoteImage(prompt, dims) {
-        var seed = fnv1a(prompt) % 999999;
+        // Fresh seed per attempt: deterministic seeds made a bad generation
+        // repeat forever (and edge-caching no longer matters now that we
+        // inline the fetched image as a data URL).
+        var seed = fnv1a(prompt + '~' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)) % 999999;
         var url = remoteImageUrl(prompt, dims, seed);
         var state = { throttled: false };
 
@@ -984,6 +1011,7 @@
                 if (err && err.name === 'AbortError') throw err;
                 var cls = classifyImageFailure(err);
                 if (cls === 'throttled') state.throttled = true;
+                shimLog('img-fetch-fail', { cls: cls, status: err && err.httpStatus, err: String((err && err.message) || err) });
                 try { console.warn('[websim-shim] image fetch failed (' + (err && err.message) + '); trying img probe'); } catch (e) {}
                 return null;
             });
@@ -992,6 +1020,7 @@
         return fetchStep.then(function (remote) {
             if (remote) {
                 SHIM.imageMode = 'remote';
+                shimLog('img-remote-ok', { via: String(remote.url).indexOf('data:') === 0 ? 'data' : 'url' });
                 try { console.info('[websim-shim] remote image generated (fetch' + (String(remote.url).indexOf('data:') === 0 ? ', re-encoded)' : ', raw url)')); } catch (e) {}
                 return remote;
             }
@@ -1009,6 +1038,7 @@
                 // pollinations often just needs longer than we waited.
                 SHIM.imageMode = 'degraded';
                 imgSlotAt = Math.max(imgSlotAt, Date.now() + 16000);
+                shimLog('img-probe-fail', {});
                 return null;
             });
         });
@@ -1237,13 +1267,27 @@
         var run = async function () {
             if (plan.wait > 0) await sleepMs(plan.wait);
             if (plan.go) {
+                var started = Date.now();
                 var remote = await attemptRemoteImage(prompt, dims);
+                // Priority callers get ONE retry after a throttle/slow miss —
+                // anonymous pollinations often succeeds on the second slot.
+                var tries = 1;
+                while (!remote && priority && tries < 2 &&
+                       (SHIM.imageMode === 'throttled' || SHIM.imageMode === 'degraded') &&
+                       Date.now() - started < 45000) {
+                    var slotWait = Math.max(1600, imgSlotAt - Date.now());
+                    shimLog('img-retry-wait', { ms: slotWait, mode: SHIM.imageMode });
+                    await sleepMs(slotWait);
+                    remote = await attemptRemoteImage(prompt, dims);
+                    tries++;
+                }
                 if (remote) return { url: remote.url };
                 if (SHIM.imageMode !== 'throttled' && SHIM.imageMode !== 'degraded' && SHIM.imageMode !== 'down') {
                     SHIM.imageMode = 'down';
                     SHIM.imageRetryAt = Date.now() + 90000;
                 }
             }
+            shimLog('img-procedural', { go: plan.go, wait: plan.wait, priority: priority, mode: SHIM.imageMode, retryAt: SHIM.imageRetryAt || 0 });
             return { url: proceduralImage(prompt, dims) };
         };
 
