@@ -196,11 +196,12 @@ try {
             return { t: t.slice(0, 24), mode: (window.__wsShim && window.__wsShim.imageMode) || 'unknown' };
         });
         thumbKind = state.t;
-        // data: alone could be the procedural fallback — require remote success too
-        thumbOk = state.t.startsWith('data:image') && remoteLogs() >= 1 && state.mode === 'remote';
+        // Thumbnails now persist the ORIGINAL remote URL (full quality, ~200B);
+        // data: would mean the procedural fallback slipped in.
+        thumbOk = state.t.startsWith('http') && remoteLogs() >= 1 && state.mode === 'remote';
         if (!thumbOk) await new Promise(r => setTimeout(r, 1000));
     }
-    check('thumbnail generated from REMOTE (data: + imageMode remote)', thumbOk, { thumbKind, logs: remoteLogs() });
+    check('thumbnail persisted as REMOTE URL (full quality) + imageMode remote', thumbOk, { thumbKind, logs: remoteLogs() });
 
     // --- open the adventure ---
     await page.click('#close-world-config-btn');

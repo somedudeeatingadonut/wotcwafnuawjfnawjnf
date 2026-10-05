@@ -867,9 +867,10 @@
             var scale = maxDim / Math.max(w, h);
             w = Math.round(w * scale); h = Math.round(h * scale);
         }
-        return 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) +
+        var qualitySuffix = ', masterpiece, best quality, correct anatomy, no extra limbs, no artifacts, sharp focus';
+        return 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt + qualitySuffix) +
             '?width=' + w + '&height=' + h +
-            '&seed=' + seed + '&nologo=true&referrer=ai-world-maker-standalone';
+            '&seed=' + seed + '&model=flux&nologo=true&referrer=ai-world-maker-standalone';
     }
 
     function classifyImageFailure(err) {
@@ -939,7 +940,7 @@
                     canvas.height = h;
                     var ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0);
-                    resolve(encodeCapped(canvas));
+                    resolve(encodeCapped(canvas, 400000));
                 } catch (e) {
                     reject(e);
                 }
@@ -1006,7 +1007,7 @@
                     );
                 });
             }).then(function (u) {
-                return { url: u, via: 'fetch' };
+                return { url: u, sourceUrl: url, via: 'fetch' };
             }).catch(function (err) {
                 if (err && err.name === 'AbortError') throw err;
                 var cls = classifyImageFailure(err);
@@ -1031,7 +1032,7 @@
                     SHIM.fetchBlocked = true;
                     SHIM.fetchBlockedUntil = Date.now() + 600000;
                     try { console.info('[websim-shim] remote image generated (img probe)'); } catch (e) {}
-                    return { url: url, via: 'img' };
+                    return { url: url, sourceUrl: url, via: 'img' };
                 }
                 // Slow generation or a blocked request: back off a single slot
                 // (~16s) instead of locking everything out for 90s. Anonymous
@@ -1046,7 +1047,8 @@
 
     /* ---- procedural renderer ---------------------------------------------- */
 
-    function encodeCapped(canvas) {
+    function encodeCapped(canvas, maxLen) {
+        maxLen = maxLen || 96000;
         function tryEncode(type, q) {
             try {
                 var d = canvas.toDataURL(type, q);
@@ -1057,12 +1059,12 @@
         var qualities = [0.8, 0.65, 0.5, 0.38];
         for (var i = 0; i < qualities.length; i++) {
             var d = tryEncode('image/webp', qualities[i]);
-            if (d && d.length <= 96000) return d;
+            if (d && d.length <= maxLen) return d;
             if (d === null) break; // webp unsupported — go straight to jpeg
         }
         for (var j = 0; j < qualities.length; j++) {
             var dj = tryEncode('image/jpeg', qualities[j]);
-            if (dj && dj.length <= 96000) return dj;
+            if (dj && dj.length <= maxLen) return dj;
         }
         // Last resort: shrink.
         var scale = 0.6;
@@ -1281,7 +1283,7 @@
                     remote = await attemptRemoteImage(prompt, dims);
                     tries++;
                 }
-                if (remote) return { url: remote.url };
+                if (remote) return { url: remote.url, sourceUrl: remote.sourceUrl || remote.url };
                 if (SHIM.imageMode !== 'throttled' && SHIM.imageMode !== 'degraded' && SHIM.imageMode !== 'down') {
                     SHIM.imageMode = 'down';
                     SHIM.imageRetryAt = Date.now() + 90000;

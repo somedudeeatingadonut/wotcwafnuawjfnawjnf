@@ -1140,6 +1140,9 @@ let lastHiddenImageUrl = '';
 let lastNon360ImageUrl = '';
 // NEW: Global variables to remember the last scene image and whether it was hidden
 let lastSceneImageUrl = '';
+// Short URL persisted into saves when available (remote original), so saves
+// store ~200 bytes instead of a ~96-400 KB data URL.
+let lastSceneImagePersist = '';
 let lastSceneWasHidden = false;
 
 // NEW: Global variable to keep track of the current location or world state
@@ -4044,8 +4047,11 @@ async function handlePlayerAction(displayActionText, aiContextActionText, clearP
                     const imageResult = await Promise.race([imageGenPromise, imageTimeoutPromise]);
                     originalImageURL = imageResult.url;
 
-                    // Default: remember the generated image URL for saving
+                    // Default: remember the generated image URL for saving.
+                    // Display uses the inline data URL; saves persist the short
+                    // original remote URL when available.
                     lastSceneImageUrl = originalImageURL || '';
+                    lastSceneImagePersist = imageResult.sourceUrl || originalImageURL || '';
                     lastSceneWasHidden = false;
 
                     // Lumen Mode: 'disable' suppresses images entirely; otherwise always show
@@ -4089,6 +4095,7 @@ async function handlePlayerAction(displayActionText, aiContextActionText, clearP
                 currentSceneImage.style.opacity = '1';
                 lastHiddenImageUrl = '';
                 lastSceneImageUrl = '';
+                lastSceneImagePersist = '';
                 lastSceneWasHidden = false;
             }
 
@@ -4347,49 +4354,98 @@ class SaveSystem {
         return cache[name] || null;
     }
 
-    static async attemptSetItemWithPrune(key, value, maxRetries = 3) {
-        // Try to set item; if quota exceeded, prune oldest saves/worlds and retry
+    static attemptSetItemWithPrune(key, obj, maxRetries = 6) {
+        // Set key=JSON.stringify(obj); on quota, progressively free space and
+        // retry. Prunes MUTATE `obj` when it is the store being written so the
+        // retry serializes the pruned state (the old version re-serialized the
+        // caller's original string, resurrecting what it deleted).
+        // NOTE: deliberately NOT async — every caller checks the return value
+        // synchronously; returning a Promise made failures look like successes
+        // (settings/worlds silently not saved).
+        let value = obj;
+        const asJson = () => JSON.stringify(value);
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             try {
-                localStorage.setItem(key, value);
+                localStorage.setItem(key, asJson());
                 return true;
             } catch (err) {
-                if (err && (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014)) {
-                    console.warn(`localStorage quota reached (attempt ${attempt + 1}/${maxRetries}). Attempting to free space.`);
-                    // Try to prune saves first, then worlds
-                    try {
-                        const saves = this.getAllSaves();
-                        const saveIds = Object.keys(saves);
-                        if (saveIds.length > 0) {
-                            // Remove the oldest save
-                            saveIds.sort((a, b) => new Date(saves[a].timestamp) - new Date(saves[b].timestamp));
-                            const oldest = saveIds[0];
-                            delete saves[oldest];
-                            localStorage.setItem(this.SAVES_KEY, JSON.stringify(saves));
-                            console.log(`Pruned oldest save: ${oldest}`);
-                            continue; // retry setItem
+                const isQuota = err && (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014);
+                if (!isQuota) throw err;
+                console.warn(`localStorage quota reached (attempt ${attempt + 1}/${maxRetries}). Freeing space.`);
+                let freed = false;
+                try {
+                    if (attempt === 0) {
+                        // 1) Strip embedded data-URL images from saves (bulk data).
+                        if (key === this.SAVES_KEY) {
+                            for (const id of Object.keys(value)) {
+                                const sv = value[id];
+                                if (sv && typeof sv.lastImageSrc === 'string' && sv.lastImageSrc.startsWith('data:')) {
+                                    sv.lastImageSrc = null;
+                                    sv.wasImageHidden = true;
+                                    freed = true;
+                                }
+                            }
                         } else {
-                            const worlds = this.getWorlds();
-                            const worldNames = Object.keys(worlds);
-                            if (worldNames.length > 0) {
-                                // Remove the oldest world by created timestamp
-                                worldNames.sort((a, b) => new Date(worlds[a].created || 0) - new Date(worlds[b].created || 0));
-                                const oldestWorld = worldNames[0];
-                                delete worlds[oldestWorld];
-                                localStorage.setItem(this.WORLDS_KEY, JSON.stringify(worlds));
-                                console.log(`Pruned oldest world: ${oldestWorld}`);
-                                continue; // retry setItem
+                            const saves = this.getAllSaves();
+                            for (const id of Object.keys(saves)) {
+                                const sv = saves[id];
+                                if (sv && typeof sv.lastImageSrc === 'string' && sv.lastImageSrc.startsWith('data:')) {
+                                    sv.lastImageSrc = null;
+                                    sv.wasImageHidden = true;
+                                    freed = true;
+                                }
+                            }
+                            if (freed) localStorage.setItem(this.SAVES_KEY, JSON.stringify(saves));
+                        }
+                        if (freed) console.log('Stripped embedded images from saves to free storage.');
+                    } else if (attempt === 1) {
+                        // 2) Delete the oldest save.
+                        if (key === this.SAVES_KEY) {
+                            const ids = Object.keys(value);
+                            if (ids.length) {
+                                ids.sort((a, b) => new Date(value[a].timestamp || 0) - new Date(value[b].timestamp || 0));
+                                delete value[ids[0]];
+                                console.log(`Pruned oldest save: ${ids[0]}`);
+                                freed = true;
+                            }
+                        } else {
+                            const saves = this.getAllSaves();
+                            const ids = Object.keys(saves);
+                            if (ids.length) {
+                                ids.sort((a, b) => new Date(saves[a].timestamp || 0) - new Date(saves[b].timestamp || 0));
+                                delete saves[ids[0]];
+                                localStorage.setItem(this.SAVES_KEY, JSON.stringify(saves));
+                                console.log(`Pruned oldest save: ${ids[0]}`);
+                                freed = true;
                             }
                         }
-                    } catch (pruneErr) {
-                        console.error("Pruning failed while handling quota error:", pruneErr);
-                        // If pruning failed for any reason, break early
-                        break;
+                    } else if (attempt === 2) {
+                        // 3) Clear the gallery cache (regenerable).
+                        if (key === this.GALLERY_CACHE_KEY) {
+                            for (const k of Object.keys(value)) delete value[k];
+                        } else {
+                            localStorage.setItem(this.GALLERY_CACHE_KEY, '{}');
+                        }
+                        console.log('Cleared gallery cache to free storage.');
+                        freed = true;
+                    } else if (key !== this.WORLDS_KEY) {
+                        // 4) Last resort: oldest world — but NEVER when the
+                        // worlds store itself is the thing being written.
+                        const worlds = this.getWorlds();
+                        const names = Object.keys(worlds);
+                        if (names.length) {
+                            names.sort((a, b) => new Date(worlds[a].created || 0) - new Date(worlds[b].created || 0));
+                            delete worlds[names[0]];
+                            localStorage.setItem(this.WORLDS_KEY, JSON.stringify(worlds));
+                            console.log(`Pruned oldest world: ${names[0]}`);
+                            freed = true;
+                        }
                     }
-                } else {
-                    // Not a quota issue, rethrow
-                    throw err;
+                } catch (pruneErr) {
+                    console.error('Pruning failed while handling quota error:', pruneErr);
+                    break;
                 }
+                if (!freed) break;
             }
         }
         // Final attempt failed
@@ -4423,8 +4479,10 @@ class SaveSystem {
             localStorage.setItem(this.WORLDS_KEY, JSON.stringify(worlds));
             return worlds[name];
         } catch (err) {
-            const success = this.attemptSetItemWithPrune(this.WORLDS_KEY, JSON.stringify(worlds));
+            const success = this.attemptSetItemWithPrune(this.WORLDS_KEY, worlds);
             if (success) return worlds[name];
+            console.error('saveWorld failed — browser storage full:', err);
+            alert('Could not save this world: browser storage is full. Delete old saves or worlds, then try again.');
             throw err;
         }
     }
@@ -4443,7 +4501,7 @@ class SaveSystem {
             return cache[name];
         } catch (err) {
             // Prune gallery cache if it hits quota
-            const success = this.attemptSetItemWithPrune(this.GALLERY_CACHE_KEY, JSON.stringify(cache));
+            const success = this.attemptSetItemWithPrune(this.GALLERY_CACHE_KEY, cache);
             return success ? cache[name] : worldData;
         }
     }
@@ -4536,7 +4594,7 @@ class SaveSystem {
             console.error("localStorage.setItem failed when saving game:", err);
             // Try to free up space by pruning the oldest save(s) then retry
             const serialized = JSON.stringify(saves);
-            const success = this.attemptSetItemWithPrune(this.SAVES_KEY, serialized);
+            const success = this.attemptSetItemWithPrune(this.SAVES_KEY, saves);
             if (success) {
                 console.log(`Game saved after pruning: ${saveId}`);
                 return;
@@ -4567,10 +4625,20 @@ class SaveSystem {
 
     static saveGlobalSettings(settings) {
         const currentSettings = this.loadGlobalSettings();
-        localStorage.setItem(this.GLOBAL_SETTINGS_KEY, JSON.stringify({
+        const payload = {
             ...currentSettings,
             ...settings
-        }));
+        };
+        try {
+            localStorage.setItem(this.GLOBAL_SETTINGS_KEY, JSON.stringify(payload));
+            return true;
+        } catch (err) {
+            const success = this.attemptSetItemWithPrune(this.GLOBAL_SETTINGS_KEY, payload);
+            if (success) return true;
+            console.error('Global settings not saved — browser storage full:', err);
+            alert('Could not save settings: browser storage is full. Delete old saves or worlds, then try again.');
+            return false;
+        }
     }
 
     static loadGlobalSettings() {
@@ -4629,7 +4697,9 @@ async function generateAndAssignThumbnail(worldName) {
 
         if (result && result.url) {
             // Attach thumbnail to the world and persist
-            world.thumbnailUrl = result.url;
+            // Prefer the original remote URL: full original quality on display
+            // and ~200 bytes of storage instead of a ~96 KB re-encoded data URL.
+            world.thumbnailUrl = result.sourceUrl || result.url;
             // Use SaveSystem.saveWorld to persist the updated world (preserve existing metadata)
             SaveSystem.saveWorld(world.name, world.prompt, world.musicDataUrl, {
                 isAdvanced: world.isAdvanced,
@@ -5655,6 +5725,7 @@ function loadSaveGame(saveId) {
     if (save.wasImageHidden && save.lastImageSrc) {
         lastHiddenImageUrl = save.lastImageSrc;
         lastSceneImageUrl = save.lastImageSrc;
+        lastSceneImagePersist = save.lastImageSrc || '';
         lastSceneWasHidden = true;
         PanoramaViewer.hide();
 
@@ -5684,6 +5755,7 @@ function loadSaveGame(saveId) {
     } else {
         lastHiddenImageUrl = '';
         lastSceneImageUrl = save.lastImageSrc || '';
+        lastSceneImagePersist = save.lastImageSrc || '';
         lastSceneWasHidden = false;
 
         if (imageCensoringMode === 'disable') {
@@ -5774,7 +5846,7 @@ function autoSave() {
             inventory,
             playerStats,
             // Always use the last scene image URL we tracked (works for 360° and normal)
-            lastImageSrc: lastSceneImageUrl || '',
+            lastImageSrc: lastSceneImagePersist || lastSceneImageUrl || '',
             wasImageHidden: !!lastSceneWasHidden,
             currentLevel: currentLevel,
         });
