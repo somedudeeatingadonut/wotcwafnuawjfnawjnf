@@ -47,7 +47,64 @@
         try {
             SHIM.log.push(Object.assign({ k: kind, t: Date.now() }, detail || {}));
             if (SHIM.log.length > 40) SHIM.log.splice(0, SHIM.log.length - 40);
+            // Mirror to localStorage so it is readable from ANY same-origin
+            // console context (the preview wrapper may iframe the app, which
+            // is why a bare __wsShim lookup threw ReferenceError).
+            try { G.localStorage && G.localStorage.setItem('ws_diag', JSON.stringify(SHIM.log)); } catch (e2) {}
+            try { renderShimOverlay(); } catch (e2) {}
         } catch (e) {}
+    }
+    function renderShimOverlay() {
+        var el = G.document && G.document.getElementById('ws-debug-overlay');
+        if (!el) return;
+        var lines = ['text=' + SHIM.textMode + ' image=' + SHIM.imageMode +
+            (SHIM.fetchBlocked ? ' fetchBlocked' : '') +
+            (Date.now() < (SHIM.textRetryAt || 0) ? ' textBackoff' : '') +
+            (Date.now() < (SHIM.imageRetryAt || 0) ? ' imageBackoff' : '')];
+        var recent = SHIM.log.slice(-12);
+        for (var i = 0; i < recent.length; i++) {
+            var e2 = recent[i];
+            lines.push('\u00b7 ' + e2.k + (e2.status ? ' ' + e2.status : '') + (e2.err ? ' ' + String(e2.err).slice(0, 60) : '') +
+                (e2.ms != null ? ' ' + e2.ms + 'ms' : '') + (e2.cls ? ' ' + e2.cls : '') + (e2.via ? ' ' + e2.via : ''));
+        }
+        el.textContent = lines.join('\n');
+    }
+    function initShimDebugOverlay() {
+        try {
+            if (!G.document || !/[?&]debug=1/.test(String(G.location && G.location.search || ''))) return;
+            if (G.document.getElementById('ws-debug-overlay')) return;
+            var el = G.document.createElement('div');
+            el.id = 'ws-debug-overlay';
+            el.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:2147483647;max-width:46vw;max-height:40vh;overflow:auto;' +
+                'background:rgba(0,0,0,.82);color:#9f9;font:11px/1.45 monospace;padding:8px 10px;border-radius:6px;white-space:pre-wrap;pointer-events:none;';
+            G.document.body.appendChild(el);
+            try { G.__wsOverlayReg = (G.__wsOverlayReg || 0) + 1; } catch (e0) {}
+            (function overlayLoop() {
+                try {
+                    G.__wsOverlayTick = (G.__wsOverlayTick || 0) + 1;
+                    G.__wsOverlaySched = (G.__wsOverlaySched || 0) + 1;
+                    renderShimOverlay();
+                } catch (e) {
+                    try { document.getElementById('ws-debug-overlay').textContent = 'overlay-err: ' + e; } catch (e2) {}
+                }
+                try {
+                    if (G.requestAnimationFrame) G.requestAnimationFrame(function () { overlayLoop(); });
+                    else G.setTimeout(overlayLoop, 1000);
+                } catch (e3) {
+                    G.setTimeout(overlayLoop, 1000);
+                }
+            })();
+        } catch (e) {}
+    }
+    if (G.document) {
+        // NOTE: timers scheduled synchronously during initial script parsing
+        // never fired in at least one real browser — always defer to DCL.
+        if (G.document.readyState === 'loading') {
+            G.document.addEventListener('DOMContentLoaded', initShimDebugOverlay);
+        } else {
+            G.document.addEventListener('load', initShimDebugOverlay);
+            G.setTimeout(initShimDebugOverlay, 50);
+        }
     }
 
     /* ================================================================
@@ -713,7 +770,7 @@
         var url = 'https://text.pollinations.ai/' + encodeURIComponent(prompt) +
             '?referrer=ai-world-maker-standalone' + (wantsJson ? '&json=true' : '');
         var t0 = Date.now();
-        return fetchTimeout(url, { method: 'GET' }, 26000, opts && opts.signal).then(function (res) {
+        return fetchTimeout(url, { method: 'GET' }, 40000, opts && opts.signal).then(function (res) {
             if (!res.ok) {
                 var e = new Error('HTTP ' + res.status);
                 e.httpStatus = res.status;
@@ -979,16 +1036,18 @@
     }
 
     function attemptRemoteImage(prompt, dims) {
-        // Fresh seed per attempt: deterministic seeds made a bad generation
-        // repeat forever (and edge-caching no longer matters now that we
-        // inline the fetched image as a data URL).
-        var seed = fnv1a(prompt + '~' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)) % 999999;
+        // Same seed for the same prompt all day: retries and later attempts
+        // reuse pollinations' cached/in-flight generation for that URL instead
+        // of restarting a slow generation from scratch (free-tier pans can
+        // take 60-90s). New day => fresh chance if yesterday's came out bad.
+        var dayKey = new Date().toISOString().slice(0, 10);
+        var seed = fnv1a(prompt + '~' + dayKey) % 999999;
         var url = remoteImageUrl(prompt, dims, seed);
         var state = { throttled: false };
 
         var fetchStep = Promise.resolve(null);
         if (!(SHIM.fetchBlocked && Date.now() < (SHIM.fetchBlockedUntil || 0))) {
-            fetchStep = fetchTimeout(url, {}, 50000, null).then(function (res) {
+            fetchStep = fetchTimeout(url, {}, 75000, null).then(function (res) {
                 if (!res.ok) {
                     var e = new Error('HTTP ' + res.status);
                     e.httpStatus = res.status;
@@ -1281,7 +1340,7 @@
                 var tries = 1;
                 while (!remote && priority && tries < 2 &&
                        (SHIM.imageMode === 'throttled' || SHIM.imageMode === 'degraded') &&
-                       Date.now() - started < 45000) {
+                       Date.now() - started < 55000) {
                     var slotWait = Math.max(1600, imgSlotAt - Date.now());
                     shimLog('img-retry-wait', { ms: slotWait, mode: SHIM.imageMode });
                     await sleepMs(slotWait);
@@ -1301,7 +1360,7 @@
         // Hard cap: create/settings flows await this — it must always settle.
         return Promise.race([
             run(),
-            sleepMs(105000).then(function () {
+            sleepMs(120000).then(function () {
                 try { console.warn('[websim-shim] imageGen hard timeout; using procedural renderer'); } catch (e) {}
                 return { url: proceduralImage(prompt, dims) };
             })
