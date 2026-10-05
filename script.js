@@ -3899,8 +3899,8 @@ async function handlePlayerAction(displayActionText, aiContextActionText, clearP
     let attemptSuccessful = false;
     let attemptCount = 0;
     const MAX_ATTEMPTS = 3;
-    const AI_TIMEOUT_MS = 45000;
-    const IMAGE_GEN_TIMEOUT_MS = 85000; // must exceed shim imageGen hard cap (80s)
+    const AI_TIMEOUT_MS = 50000;
+    const IMAGE_GEN_TIMEOUT_MS = 110000; // must exceed shim imageGen hard cap (105s)
 
     while (attemptCount < MAX_ATTEMPTS && !attemptSuccessful) {
         attemptCount++;

@@ -713,7 +713,7 @@
         var url = 'https://text.pollinations.ai/' + encodeURIComponent(prompt) +
             '?referrer=ai-world-maker-standalone' + (wantsJson ? '&json=true' : '');
         var t0 = Date.now();
-        return fetchTimeout(url, { method: 'GET' }, 14000, opts && opts.signal).then(function (res) {
+        return fetchTimeout(url, { method: 'GET' }, 26000, opts && opts.signal).then(function (res) {
             if (!res.ok) {
                 var e = new Error('HTTP ' + res.status);
                 e.httpStatus = res.status;
@@ -816,6 +816,9 @@
                 content = opts.json ? cleanJsonText(remoteContent) : remoteContent;
                 model = 'pollinations';
             } else {
+                if (remoteContent != null) {
+                    shimLog('text-nonjson', { len: String(remoteContent).length });
+                }
                 content = routeOffline(messages);
                 model = 'offline-director';
             }
@@ -868,7 +871,9 @@
             w = Math.round(w * scale); h = Math.round(h * scale);
         }
         var qualitySuffix = ', masterpiece, best quality, correct anatomy, no extra limbs, no artifacts, sharp focus';
-        return 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt + qualitySuffix) +
+        var safePrompt = String(prompt || '');
+        if (safePrompt.length > 2000) safePrompt = safePrompt.slice(0, 2000);
+        return 'https://image.pollinations.ai/prompt/' + encodeURIComponent(safePrompt + qualitySuffix) +
             '?width=' + w + '&height=' + h +
             '&seed=' + seed + '&model=flux&nologo=true&referrer=ai-world-maker-standalone';
     }
@@ -983,7 +988,7 @@
 
         var fetchStep = Promise.resolve(null);
         if (!(SHIM.fetchBlocked && Date.now() < (SHIM.fetchBlockedUntil || 0))) {
-            fetchStep = fetchTimeout(url, {}, 40000, null).then(function (res) {
+            fetchStep = fetchTimeout(url, {}, 50000, null).then(function (res) {
                 if (!res.ok) {
                     var e = new Error('HTTP ' + res.status);
                     e.httpStatus = res.status;
@@ -1026,7 +1031,7 @@
                 return remote;
             }
             if (state.throttled) return null; // don't burn a probe on a 429
-            return imageLoadTest(url, 20000).then(function (ok) {
+            return imageLoadTest(url, 25000).then(function (ok) {
                 if (ok) {
                     SHIM.imageMode = 'remote';
                     SHIM.fetchBlocked = true;
@@ -1296,7 +1301,7 @@
         // Hard cap: create/settings flows await this — it must always settle.
         return Promise.race([
             run(),
-            sleepMs(80000).then(function () {
+            sleepMs(105000).then(function () {
                 try { console.warn('[websim-shim] imageGen hard timeout; using procedural renderer'); } catch (e) {}
                 return { url: proceduralImage(prompt, dims) };
             })
