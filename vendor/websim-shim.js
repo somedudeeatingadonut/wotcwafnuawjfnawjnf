@@ -58,6 +58,8 @@
         var el = G.document && G.document.getElementById('ws-debug-overlay');
         if (!el) return;
         var lines = ['text=' + SHIM.textMode + ' image=' + SHIM.imageMode +
+            ' model=' + (typeof currentTextModel === 'function' ? currentTextModel() : '?') +
+            (SHIM.apiKey ? ' key=yes' : '') +
             (SHIM.fetchBlocked ? ' fetchBlocked' : '') +
             (Date.now() < (SHIM.textRetryAt || 0) ? ' textBackoff' : '') +
             (Date.now() < (SHIM.imageRetryAt || 0) ? ' imageBackoff' : '')];
@@ -710,13 +712,61 @@
         'https://text.pollinations.ai/openai',
         'https://text.pollinations.ai/'
     ];
+    var FALLBACK_TEXT_MODELS = ['openai', 'mistral', 'llama', 'openai-fast'];
+
+    // Pollinations now gates text behind a Pollen/credit system: the free
+    // ("anonymous"-tier) model list rotates and paid defaults answer 402.
+    // Discover the current free models and rotate on 402.
+    function ensureTextModels() {
+        if (SHIM.textModels && Date.now() - (SHIM.textModelsAt || 0) < 1800000) return Promise.resolve();
+        if (SHIM.textModelsPending) return SHIM.textModelsPending;
+        SHIM.textModelsPending = fetchTimeout('https://text.pollinations.ai/models', { method: 'GET' }, 8000, null)
+            .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.text(); })
+            .then(function (t) {
+                var list = JSON.parse(t);
+                if (list && !Array.isArray(list) && Array.isArray(list.models)) list = list.models;
+                if (!Array.isArray(list)) throw new Error('unexpected models payload');
+                var free = [];
+                for (var i = 0; i < list.length; i++) {
+                    var m = list[i];
+                    if (!m) continue;
+                    var name = String(m.name || m.id || '');
+                    if (!name) continue;
+                    var tier = String(m.tier != null ? m.tier : (m.tier_name || '')).toLowerCase();
+                    var isFree = tier === 'anonymous' || tier === 'free' ||
+                        m.anonymous === true || m.free === true || m.pollen === 0;
+                    if (isFree) free.push(name);
+                }
+                SHIM.textModels = free.length ? free.slice(0, 8) : FALLBACK_TEXT_MODELS.slice();
+                SHIM.textModelsAt = Date.now();
+                shimLog('text-models', { n: SHIM.textModels.length, models: SHIM.textModels.join(',') });
+            })
+            .catch(function (e) {
+                if (!SHIM.textModels || !SHIM.textModels.length) SHIM.textModels = FALLBACK_TEXT_MODELS.slice();
+                SHIM.textModelsAt = Date.now();
+                shimLog('text-models-fail', { err: String((e && e.message) || e) });
+            })
+            .then(function () { SHIM.textModelsPending = null; });
+        return SHIM.textModelsPending;
+    }
+    function currentTextModel() {
+        var arr = (SHIM.textModels && SHIM.textModels.length) ? SHIM.textModels : FALLBACK_TEXT_MODELS;
+        return arr[(SHIM.textModelIdx || 0) % arr.length];
+    }
+    function rotateTextModel(reason) {
+        SHIM.textModelIdx = (SHIM.textModelIdx || 0) + 1;
+        shimLog('text-model-rotate', { to: currentTextModel(), reason: reason || '' });
+    }
 
     function remoteTextAttempt(url, body, signal, ms) {
         var t0 = Date.now();
-        var tag = url.indexOf('/openai') !== -1 ? 'post-openai' : 'post-bare';
+        var tag = url.indexOf('gen.pollinations.ai') !== -1 ? 'post-gen'
+            : (url.indexOf('/openai') !== -1 ? 'post-openai' : 'post-bare');
+        var headers = { 'Content-Type': 'application/json' };
+        if (SHIM.apiKey) headers['Authorization'] = 'Bearer ' + SHIM.apiKey;
         return fetchTimeout(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             body: body
         }, ms || 14000, signal).then(function (res) {
             if (!res.ok) {
@@ -785,9 +835,12 @@
         var prompt = buildGetPrompt(messages);
         if (wantsJson) prompt += '\n\nRespond with ONLY valid JSON. No markdown fences, no commentary.';
         var url = 'https://text.pollinations.ai/' + encodeURIComponent(prompt) +
-            '?referrer=ai-world-maker-standalone' + (wantsJson ? '&json=true' : '');
+            '?referrer=ai-world-maker-standalone' + (wantsJson ? '&json=true' : '') +
+            '&model=' + encodeURIComponent(currentTextModel());
         var t0 = Date.now();
-        return fetchTimeout(url, { method: 'GET' }, 40000, opts && opts.signal).then(function (res) {
+        var getOpts = { method: 'GET' };
+        if (SHIM.apiKey) getOpts.headers = { 'Authorization': 'Bearer ' + SHIM.apiKey };
+        return fetchTimeout(url, getOpts, 40000, opts && opts.signal).then(function (res) {
             if (!res.ok) {
                 var e = new Error('HTTP ' + res.status);
                 e.httpStatus = res.status;
@@ -818,62 +871,77 @@
         if (SHIM.textMode === 'offline' && Date.now() < SHIM.textRetryAt) {
             return Promise.resolve(null);
         }
-        var body;
-        try {
-            body = JSON.stringify({
-                model: 'openai',
-                messages: normalizeMessages(messages),
-                private: true,
-                referrer: 'ai-world-maker-standalone'
-            });
-        } catch (e) {
-            return Promise.resolve(null);
-        }
         var signal = opts ? opts.signal : null;
         var wantsJson = !!(opts && opts.json);
 
+        function buildBody() {
+            try {
+                return JSON.stringify({
+                    model: currentTextModel(),
+                    messages: normalizeMessages(messages),
+                    referrer: 'ai-world-maker-standalone'
+                });
+            } catch (e) { return null; }
+        }
+
+        var postGen = function () {
+            var body = buildBody();
+            if (!body) return Promise.reject(new Error('body serialize failed'));
+            return remoteTextAttempt('https://gen.pollinations.ai/v1/chat/completions', body, signal, 16000)
+                .catch(function (err) { notePostFailure(); throw err; });
+        };
         var postMain = function () {
+            var body = buildBody();
+            if (!body) return Promise.reject(new Error('body serialize failed'));
             return remoteTextAttempt(TEXT_ENDPOINTS[0], body, signal, 14000)
                 .catch(function (err) { notePostFailure(); throw err; });
         };
         var getLegacy = function () { return remoteTextGet(messages, opts, wantsJson); };
         var postBare = function () {
+            var body = buildBody();
+            if (!body) return Promise.reject(new Error('body serialize failed'));
             return remoteTextAttempt(TEXT_ENDPOINTS[1], body, signal, 12000)
                 .catch(function (err) { notePostFailure(); throw err; });
         };
 
-        var attempts = (Date.now() < (SHIM.postSuspectUntil || 0))
-            ? [getLegacy, postMain, postBare]
-            : [postMain, getLegacy, postBare];
+        return ensureTextModels().then(function () {
+            var base = (Date.now() < (SHIM.postSuspectUntil || 0))
+                ? [getLegacy, postMain, postBare]
+                : [postMain, getLegacy, postBare];
+            // With an API key, the documented gen.pollinations endpoint leads.
+            var attempts = SHIM.apiKey ? [postGen].concat(base) : base;
 
-        function runAttempt(i) {
-            if (i >= attempts.length) {
-                shimLog('text-all-failed', { postSuspectUntil: SHIM.postSuspectUntil || 0 });
-                return Promise.reject(new Error('All text endpoints failed'));
+            function runAttempt(i) {
+                if (i >= attempts.length) {
+                    shimLog('text-all-failed', { postSuspectUntil: SHIM.postSuspectUntil || 0, model: currentTextModel() });
+                    return Promise.reject(new Error('All text endpoints failed'));
+                }
+                var t0 = Date.now();
+                var name = attempts[i].name || ('attempt' + i);
+                return sleepMs(i === 0 ? 0 : 1200).then(function () {
+                    return Promise.resolve().then(attempts[i]);
+                }).catch(function (err) {
+                    if (err && err.name === 'AbortError') throw err;
+                    shimLog('text-attempt-fail', { which: name, ms: Date.now() - t0, status: err && err.httpStatus, err: String((err && err.message) || err), model: currentTextModel() });
+                    // 402 = Pollen paywall on this model: try the next free one.
+                    if (err && err.httpStatus === 402) rotateTextModel('402');
+                    return runAttempt(i + 1);
+                });
             }
-            var t0 = Date.now();
-            var name = attempts[i].name || ('attempt' + i);
-            return sleepMs(i === 0 ? 0 : 1200).then(function () {
-                return Promise.resolve().then(attempts[i]);
+
+            return runAttempt(0).then(function (content) {
+                SHIM.textMode = 'remote';
+                shimLog('text-remote-ok', { model: currentTextModel() });
+                return content;
             }).catch(function (err) {
                 if (err && err.name === 'AbortError') throw err;
-                shimLog('text-attempt-fail', { which: name, ms: Date.now() - t0, status: err && err.httpStatus, err: String((err && err.message) || err) });
-                return runAttempt(i + 1);
+                var backoff = (err && err.httpStatus === 429) ? 120000
+                    : (err && err.httpStatus === 402) ? 60000 : 90000;
+                SHIM.textMode = 'offline';
+                shimLog('text-offline', { backoff: backoff, err: String((err && err.message) || err), model: currentTextModel() });
+                try { console.warn('[websim-shim] text API unavailable (' + (err && err.message) + '); using offline director'); } catch (e) {}
+                return null;
             });
-        }
-
-        return runAttempt(0).then(function (content) {
-            SHIM.textMode = 'remote';
-            shimLog('text-remote-ok', {});
-            return content;
-        }).catch(function (err) {
-            if (err && err.name === 'AbortError') throw err;
-            var backoff = (err && err.httpStatus === 429) ? 120000 : 90000;
-            SHIM.textMode = 'offline';
-            shimLog('text-offline', { backoff: backoff, err: String((err && err.message) || err) });
-            SHIM.textRetryAt = Date.now() + backoff;
-            try { console.warn('[websim-shim] text API unavailable (' + (err && err.message) + '); using offline director'); } catch (e) {}
-            return null;
         });
     }
 
@@ -1858,6 +1926,14 @@
     if (typeof G.WebsimSocket === 'undefined') {
         G.WebsimSocket = WebsimSocket;
     }
+
+    try { SHIM.apiKey = lsGet('ws_pk') || ''; } catch (e) { SHIM.apiKey = ''; }
+    G.__wsShimSetApiKey = function (k) {
+        SHIM.apiKey = String(k || '').trim();
+        lsSet('ws_pk', SHIM.apiKey);
+        shimLog('api-key-set', { has: SHIM.apiKey ? 1 : 0 });
+        return SHIM.apiKey;
+    };
 
     // Introspection helpers for debugging/tests.
     G.__wsShimInternals = {

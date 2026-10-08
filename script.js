@@ -3423,6 +3423,23 @@ imageCensoringSelect.addEventListener('change', () => {
     console.log(`Image Censoring Mode: ${imageCensoringMode}`);
 });
 
+// Optional Pollinations API key (pk_...) — unlocks/authorizes remote text
+// when the anonymous tier answers 402 Payment Required.
+const pollinationsKeyInput = document.getElementById('pollinations-key-input');
+if (pollinationsKeyInput) {
+    try {
+        const existingKey = SaveSystem.loadGlobalSettings().pollinationsApiKey || '';
+        pollinationsKeyInput.value = existingKey;
+        if (existingKey && window.__wsShimSetApiKey) window.__wsShimSetApiKey(existingKey);
+    } catch (e) { /* first run */ }
+    pollinationsKeyInput.addEventListener('change', () => {
+        const v = pollinationsKeyInput.value.trim();
+        SaveSystem.saveGlobalSettings({ pollinationsApiKey: v });
+        try { if (window.__wsShimSetApiKey) window.__wsShimSetApiKey(v); } catch (e) {}
+        console.log(v ? 'Pollinations API key saved' : 'Pollinations API key cleared');
+    });
+}
+
 // Time format and clock style listeners
 if (timeFormatSelect) {
     timeFormatSelect.addEventListener('change', () => {
