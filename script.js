@@ -1157,33 +1157,23 @@ const aboutBtn = document.getElementById('about-btn');
 const aboutMenu = document.getElementById('about-menu');
 const aboutCloseBtn = document.getElementById('about-close-btn');
 
-const secretEmbedBtn = document.getElementById('secret-embed-btn');
-const embedMenu = document.getElementById('embed-menu');
-const embedCloseBtn = document.getElementById('embed-close-btn');
-
-const secretIframe = embedMenu.querySelector('iframe');
-const secretIframeUrl = secretIframe.src;
-
-secretEmbedBtn.addEventListener('click', () => {
-    playSound(audioCache.get('ui_click.mp3'), 0.4);
-    stopMusic();
-    // Ensure the iframe has its source set when opening
-    secretIframe.src = secretIframeUrl;
-    embedMenu.classList.remove('hidden');
-    // Ensure the iframe gains focus so pointer lock can be requested by the game
-    setTimeout(() => secretIframe.focus(), 100);
-});
-
-embedCloseBtn.addEventListener('click', () => {
-    playSound(audioCache.get('ui_click.mp3'), 0.4);
-    // "Mute" the embed by clearing the source so audio stops
-    secretIframe.src = '';
-    embedMenu.classList.add('hidden');
-    // Resume menu music
-    if (musicVolume > 0) {
-        playBackgroundMusic('menumusic.mp3');
-    }
-});
+// Main-menu Debug button (replaces the old secret embed): toggles the
+// on-screen shim diagnostic overlay (text/image modes + recent events).
+const debugLogBtn = document.getElementById('debug-log-btn');
+if (debugLogBtn) {
+    debugLogBtn.addEventListener('click', () => {
+        playSound(audioCache.get('ui_click.mp3'), 0.4);
+        try {
+            if (typeof window.__wsShimToggleDebug === 'function') {
+                window.__wsShimToggleDebug();
+            } else {
+                console.warn('[debug] shim debug toggle not available');
+            }
+        } catch (e) {
+            console.warn('[debug] toggle failed:', e);
+        }
+    });
+}
 
 creditsBtn.addEventListener('click', () => {
     playSound(audioCache.get('ui_click.mp3'), 0.4);

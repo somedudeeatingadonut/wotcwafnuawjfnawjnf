@@ -69,8 +69,9 @@
                     <span class="btn-icon">✨</span>
                     <span class="btn-text" data-i18n="main.credits">Credits</span>
                 </button>
-                <button id="secret-embed-btn" class="menu-button square-btn" data-i18n-title="main.unknownProtocol" title="Unknown Protocol">
-                    <img src="v1.svg" alt="Unknown Protocol" class="btn-icon-img" crossorigin="anonymous">
+                <button id="debug-log-btn" class="menu-button compact" title="Toggle debug overlay">
+                    <span class="btn-icon">🐞</span>
+                    <span class="btn-text">Debug</span>
                 </button>
             </div>
 
@@ -1109,19 +1110,7 @@
         </div>
     </div>
 
-    <div id="embed-menu" class="full-screen-menu hidden">
-        <div class="menu-header-row">
-            <h3>?</h3>
-            <button id="embed-close-btn" class="back-circle-btn">×</button>
-        </div>
-        <div class="menu-content wide" style="height: calc(100% - 150px); padding: 20px; box-sizing: border-box;">
-            <div style="width: 100%; height: 100%; border: 2px solid #00f3ff; border-radius: 12px; overflow: hidden; box-shadow: 0 0 30px rgba(0, 243, 255, 0.2);">
-                <iframe src='https://www.gamenora.com/embed/ultrakill-prelude' style='width:100%;height:100%;' frameborder='0' allow="pointer-lock; fullscreen; autoplay; keyboard-lock" allowfullscreen></iframe>
-            </div>
-        </div>
-    </div>
-
-    <!-- Maintenance Data Viewer Modal -->
+        <!-- Maintenance Data Viewer Modal -->
     <div id="maintenance-viewer-modal" class="entry-modal-overlay hidden" style="z-index: 8000;">
         <div class="entry-modal-card" style="max-width: 800px; width: 95%;">
             <div class="entry-modal-header">

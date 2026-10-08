@@ -69,9 +69,10 @@
         }
         el.textContent = lines.join('\n');
     }
-    function initShimDebugOverlay() {
+    function initShimDebugOverlay(force) {
         try {
-            if (!G.document || !/[?&]debug=1/.test(String(G.location && G.location.search || ''))) return;
+            if (!G.document) return;
+            if (!force && !/[?&]debug=1/.test(String(G.location && G.location.search || ''))) return;
             if (G.document.getElementById('ws-debug-overlay')) return;
             var el = G.document.createElement('div');
             el.id = 'ws-debug-overlay';
@@ -96,14 +97,30 @@
             })();
         } catch (e) {}
     }
+    G.__wsShimToggleDebug = function () {
+        try {
+            var el = G.document.getElementById('ws-debug-overlay');
+            if (!el) {
+                initShimDebugOverlay(true);
+                el = G.document.getElementById('ws-debug-overlay');
+                if (el) { el.style.display = ''; renderShimOverlay(); }
+                return true;
+            }
+            var hidden = el.style.display === 'none';
+            el.style.display = hidden ? '' : 'none';
+            if (hidden) renderShimOverlay();
+            return hidden;
+        } catch (e) { return false; }
+    };
     if (G.document) {
         // NOTE: timers scheduled synchronously during initial script parsing
         // never fired in at least one real browser — always defer to DCL.
         if (G.document.readyState === 'loading') {
-            G.document.addEventListener('DOMContentLoaded', initShimDebugOverlay);
+            // Wrap: DOM events pass an Event object as arg[0] (truthy => force!)
+            G.document.addEventListener('DOMContentLoaded', function () { initShimDebugOverlay(); });
         } else {
-            G.document.addEventListener('load', initShimDebugOverlay);
-            G.setTimeout(initShimDebugOverlay, 50);
+            G.document.addEventListener('load', function () { initShimDebugOverlay(); });
+            G.setTimeout(function () { initShimDebugOverlay(); }, 50);
         }
     }
 
