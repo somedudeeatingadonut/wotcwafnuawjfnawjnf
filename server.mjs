@@ -77,7 +77,9 @@ async function handler(req, res) {
         const headers = {
             'Content-Type': type,
             'Content-Length': stat.size,
-            'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=300',
+            // Never cache code: a 5-minute max-age without validators once
+            // served stale shim/script.js after an update ("nothing changed").
+            'Cache-Control': (ext === '.html' || ext === '.js' || ext === '.mjs') ? 'no-cache' : 'public, max-age=300',
             'X-Content-Type-Options': 'nosniff'
         };
 

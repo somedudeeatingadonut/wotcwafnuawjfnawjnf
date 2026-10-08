@@ -66,8 +66,9 @@
         var recent = SHIM.log.slice(-12);
         for (var i = 0; i < recent.length; i++) {
             var e2 = recent[i];
-            lines.push('\u00b7 ' + e2.k + (e2.status ? ' ' + e2.status : '') + (e2.err ? ' ' + String(e2.err).slice(0, 60) : '') +
-                (e2.ms != null ? ' ' + e2.ms + 'ms' : '') + (e2.cls ? ' ' + e2.cls : '') + (e2.via ? ' ' + e2.via : ''));
+            lines.push('\u00b7 ' + e2.k + (e2.status ? ' ' + e2.status : '') + (e2.err ? ' ' + String(e2.err).slice(0, 90) : '') +
+                (e2.ms != null ? ' ' + e2.ms + 'ms' : '') + (e2.cls ? ' ' + e2.cls : '') + (e2.via ? ' ' + e2.via : '') +
+                (e2.models ? ' [' + String(e2.models).slice(0, 70) + ']' : ''));
         }
         el.textContent = lines.join('\n');
     }
@@ -712,7 +713,9 @@
         'https://text.pollinations.ai/openai',
         'https://text.pollinations.ai/'
     ];
-    var FALLBACK_TEXT_MODELS = ['openai', 'mistral', 'llama', 'openai-fast'];
+    // openai-fast is the only keyless ("anonymous"-tier) model Pollinations
+    // currently lists; paid names come after it only as discovery fallbacks.
+    var FALLBACK_TEXT_MODELS = ['openai-fast', 'openai', 'mistral', 'llama'];
 
     // Pollinations now gates text behind a Pollen/credit system: the free
     // ("anonymous"-tier) model list rotates and paid defaults answer 402.
@@ -758,6 +761,32 @@
         shimLog('text-model-rotate', { to: currentTextModel(), reason: reason || '' });
     }
 
+    // Pollinations 402 bodies carry the exact billing/quota reason
+    // ({"error":{"code":"INSUFFICIENT_BALANCE"|"KEY_BUDGET_EXHAUSTED"|…}}).
+    // Fold it into the error message so the Debug overlay shows WHY.
+    function errBodySummary(b) {
+        b = String(b || '');
+        if (!b) return '';
+        try {
+            var j = JSON.parse(b);
+            if (j && j.error) {
+                var code = j.error.code || j.error.type || '';
+                var msg = j.error.message || '';
+                if (code || msg) return (' ' + code + ' ' + msg).slice(0, 150);
+            }
+        } catch (e) {}
+        return ' ' + b.replace(/\s+/g, ' ').slice(0, 120);
+    }
+    function notOkError(res) {
+        var st = res.status;
+        return res.text().catch(function () { return ''; }).then(function (b) {
+            var e = new Error('HTTP ' + st + errBodySummary(b));
+            e.httpStatus = st;
+            e.body = String(b || '').slice(0, 300);
+            throw e;
+        });
+    }
+
     function remoteTextAttempt(url, body, signal, ms) {
         var t0 = Date.now();
         var tag = url.indexOf('gen.pollinations.ai') !== -1 ? 'post-gen'
@@ -769,11 +798,7 @@
             headers: headers,
             body: body
         }, ms || 14000, signal).then(function (res) {
-            if (!res.ok) {
-                var e = new Error('HTTP ' + res.status);
-                e.httpStatus = res.status;
-                throw e;
-            }
+            if (!res.ok) return notOkError(res);
             var ct = String(res.headers.get('content-type') || '');
             if (ct.indexOf('text/html') !== -1) throw new Error('Unexpected HTML response');
             return res.text();
@@ -841,11 +866,7 @@
         var getOpts = { method: 'GET' };
         if (SHIM.apiKey) getOpts.headers = { 'Authorization': 'Bearer ' + SHIM.apiKey };
         return fetchTimeout(url, getOpts, 40000, opts && opts.signal).then(function (res) {
-            if (!res.ok) {
-                var e = new Error('HTTP ' + res.status);
-                e.httpStatus = res.status;
-                throw e;
-            }
+            if (!res.ok) return notOkError(res);
             var ct = String(res.headers.get('content-type') || '');
             if (ct.indexOf('text/html') !== -1) throw new Error('Unexpected HTML response');
             return res.text();
@@ -911,9 +932,10 @@
             // With an API key, the documented gen.pollinations endpoint leads.
             var attempts = SHIM.apiKey ? [postGen].concat(base) : base;
 
+            var lastStatus = 0;
             function runAttempt(i) {
                 if (i >= attempts.length) {
-                    shimLog('text-all-failed', { postSuspectUntil: SHIM.postSuspectUntil || 0, model: currentTextModel() });
+                    shimLog('text-all-failed', { postSuspectUntil: SHIM.postSuspectUntil || 0, model: currentTextModel(), status: lastStatus || undefined });
                     return Promise.reject(new Error('All text endpoints failed'));
                 }
                 var t0 = Date.now();
@@ -922,6 +944,7 @@
                     return Promise.resolve().then(attempts[i]);
                 }).catch(function (err) {
                     if (err && err.name === 'AbortError') throw err;
+                    if (err && err.httpStatus) lastStatus = err.httpStatus;
                     shimLog('text-attempt-fail', { which: name, ms: Date.now() - t0, status: err && err.httpStatus, err: String((err && err.message) || err), model: currentTextModel() });
                     // 402 = Pollen paywall on this model: try the next free one.
                     if (err && err.httpStatus === 402) rotateTextModel('402');
@@ -935,10 +958,12 @@
                 return content;
             }).catch(function (err) {
                 if (err && err.name === 'AbortError') throw err;
-                var backoff = (err && err.httpStatus === 429) ? 120000
-                    : (err && err.httpStatus === 402) ? 60000 : 90000;
+                // The aggregate error carries no httpStatus — use the last real one.
+                var backoff = (lastStatus === 429) ? 120000
+                    : (lastStatus === 402) ? 60000 : 90000;
                 SHIM.textMode = 'offline';
-                shimLog('text-offline', { backoff: backoff, err: String((err && err.message) || err), model: currentTextModel() });
+                SHIM.textRetryAt = Date.now() + backoff;
+                shimLog('text-offline', { backoff: backoff, status: lastStatus || undefined, err: String((err && err.message) || err), model: currentTextModel() });
                 try { console.warn('[websim-shim] text API unavailable (' + (err && err.message) + '); using offline director'); } catch (e) {}
                 return null;
             });
