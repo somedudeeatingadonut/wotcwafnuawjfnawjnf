@@ -39,10 +39,11 @@ Case drop table (weights are per-open, value multipliers are × case price):
 | Rare | 3.2% | 3.0× |
 | Epic | 0.65% | 12× |
 | Legendary | 0.12% | 60× |
-| Exotic | 0.03% | 2,800× |
+| Exotic | 0.03% | 900× |
 
-The exotic multiplier is solved at load time so the table always sums to exactly a
-90% return. Nothing here is "provably fair" and the code doesn't pretend otherwise.
+The exotic multiplier is solved at load time (currently 900×) so the table always
+sums to exactly a 90% return — change the case prices or the weights and the top
+prize re-solves itself. Nothing here is "provably fair" and the code doesn't pretend otherwise.
 
 ## The fake AI players
 
