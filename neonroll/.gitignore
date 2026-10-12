@@ -1,0 +1,4 @@
+# local fake-coin save file (best-effort persistence, never committed)
+.data/
+node_modules/
+*.log

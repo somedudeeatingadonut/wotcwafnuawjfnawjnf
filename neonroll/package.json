@@ -1,0 +1,21 @@
+{
+  "name": "neonroll",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fake-currency skin-casino simulator (cases, battles, crash, coinflip, mines) with simulated bot players. No real money, no payments, no withdrawals.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {},
+  "keywords": [
+    "simulation",
+    "fake-currency",
+    "no-real-money",
+    "demo"
+  ],
+  "license": "MIT"
+}

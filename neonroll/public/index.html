@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NEONROLL — fake-currency skin casino (demo, no real money)</title>
+<meta name="description" content="A fake-currency case opening / crash / coinflip simulator with simulated AI players. No real money, no deposits, no withdrawals — ever.">
+<meta name="theme-color" content="#07090f">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-bot-tags="1">
+
+<!-- Fake-currency banner (non-dismissible on purpose) -->
+<div class="disclaimer-strip" role="note">
+  <strong>DEMO MODE</strong>
+  <span>Fake coins only · no deposits · no withdrawals · no real money · every opponent is a simulated bot</span>
+</div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">🎰</div>
+    <div class="brand-text">
+      <h1>NEON<span>ROLL</span></h1>
+      <p>fake-currency skin casino sim</p>
+    </div>
+  </div>
+
+  <div class="ticker" aria-hidden="true"><div class="ticker-track" id="ticker-track"></div></div>
+
+  <div class="topbar-right">
+    <div class="online-pill"><span class="dot"></span><span id="online-count">—</span> online</div>
+    <button class="balance-pill" id="balance-pill" title="Your fake coin balance">
+      <span class="coin">🪙</span><span id="balance-value">0</span>
+    </button>
+    <button class="btn btn-ghost" id="bonus-btn" title="Free coins, no purchase ever">
+      <span>🎁</span> <span id="bonus-label">Free coins</span>
+    </button>
+    <button class="btn btn-ghost icon" id="sound-btn" title="Sound on/off">🔊</button>
+    <button class="user-chip" id="user-chip">
+      <span class="avatar" id="user-avatar"></span>
+      <span class="user-meta"><b id="user-name">Player</b><i>level <span id="user-level">1</span></i></span>
+    </button>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="sidenav" id="sidenav">
+    <button class="nav-item active" data-view="crash"><span class="ico">📈</span><span>Crash</span></button>
+    <button class="nav-item" data-view="cases"><span class="ico">📦</span><span>Cases</span></button>
+    <button class="nav-item" data-view="battles"><span class="ico">⚔️</span><span>Battles</span></button>
+    <button class="nav-item" data-view="coinflip"><span class="ico">🪙</span><span>Coinflip</span></button>
+    <button class="nav-item" data-view="mines"><span class="ico">💥</span><span>Mines</span></button>
+    <div class="nav-sep"></div>
+    <button class="nav-item" data-view="inventory"><span class="ico">🎒</span><span>Inventory</span><span class="nav-badge" id="inv-badge">0</span></button>
+    <button class="nav-item" data-view="leaderboard"><span class="ico">🏆</span><span>Leaderboard</span></button>
+    <button class="nav-item" data-view="about"><span class="ico">🧠</span><span>How this works</span></button>
+    <div class="nav-sep"></div>
+    <div class="level-box">
+      <div class="level-ring"><span id="level-num">1</span></div>
+      <div class="level-track"><div class="level-fill" id="level-fill"></div></div>
+      <small id="level-xp">0 / 250 xp</small>
+    </div>
+    <div class="side-note">🚫 <b>Zero payment code.</b><br>Coins are handed out for free and cannot be bought, sold, or cashed out.</div>
+  </nav>
+
+  <main class="views" id="views">
+
+    <!-- ============================ CRASH ============================ -->
+    <section class="view active" id="view-crash">
+      <div class="view-head">
+        <div>
+          <h2>Crash</h2>
+          <p>Watch the multiplier climb, cash out before it busts. Busting early is <em>most</em> rounds.</p>
+        </div>
+        <div class="head-badges">
+          <span class="chip chip-warn">1% instant-bust rounds</span>
+          <span class="chip">~50% of rounds end below 2.00x</span>
+        </div>
+      </div>
+
+      <div class="crash-grid">
+        <div class="panel crash-stage">
+          <div class="crash-history" id="crash-history"></div>
+          <div class="canvas-wrap">
+            <canvas id="crash-canvas"></canvas>
+            <div class="crash-bust" id="crash-bust">BUSTED</div>
+          </div>
+          <div class="crash-readout">
+            <div class="crash-mult" id="crash-mult">1.00x</div>
+            <div class="crash-status" id="crash-status">Betting open</div>
+          </div>
+          <div class="progress"><div class="progress-fill" id="crash-progress"></div></div>
+        </div>
+
+        <div class="panel crash-side">
+          <header class="panel-head">
+            <h3>Round players</h3>
+            <span class="muted" id="crash-bet-summary">0 bets · 0 coins</span>
+          </header>
+          <ul class="bet-list" id="crash-bets"></ul>
+        </div>
+      </div>
+
+      <div class="panel bet-bar">
+        <div class="field">
+          <label for="crash-amount">Bet amount</label>
+          <div class="input-row">
+            <span class="coin">🪙</span>
+            <input id="crash-amount" type="number" min="10" step="10" value="100">
+          </div>
+          <div class="quick-row">
+            <button data-crash-amt="10">10</button>
+            <button data-crash-amt="100">100</button>
+            <button data-crash-amt="500">500</button>
+            <button data-crash-amt="half">½</button>
+            <button data-crash-amt="double">2×</button>
+            <button data-crash-amt="max">max</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="crash-auto">Auto cash out at</label>
+          <div class="input-row">
+            <span>✂️</span>
+            <input id="crash-auto" type="number" min="1.01" step="0.1" value="2.00">
+          </div>
+          <small class="muted">Optional. Your bet is sold automatically if the multiplier reaches it.</small>
+        </div>
+        <div class="field grow">
+          <div class="potential">
+            <span>Potential payout</span>
+            <b id="crash-potential">🪙 200</b>
+          </div>
+          <button class="btn btn-primary big" id="crash-action">Place bet</button>
+          <button class="btn btn-ghost wide" id="crash-repeat">Repeat last bet: <span id="crash-last">—</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ CASES ============================ -->
+    <section class="view" id="view-cases">
+      <div class="view-head">
+        <div>
+          <h2>Case opening</h2>
+          <p>Open a case, get a fictional skin, keep it or sell it back for coins. Every case pays out ~90% of its price on average — and the UI shows you the odds.</p>
+        </div>
+        <div class="head-badges">
+          <span class="chip">invented items only</span>
+          <span class="chip chip-warn">≈10% disclosed edge</span>
+        </div>
+      </div>
+      <div class="case-grid" id="case-grid"></div>
+      <div class="panel live-unbox" id="live-unbox">
+        <header class="panel-head"><h3>Live unboxings by bots</h3><span class="muted">simulated players only</span></header>
+        <div class="unbox-strip" id="unbox-strip"></div>
+      </div>
+    </section>
+
+    <!-- ============================ BATTLES ============================ -->
+    <section class="view" id="view-battles">
+      <div class="view-head">
+        <div>
+          <h2>Case battles</h2>
+          <p>You vs a simulated opponent. Same case, same number of openings, highest total value takes both piles.</p>
+        </div>
+        <div class="head-badges"><span class="chip chip-warn">10% rake on the pot</span></div>
+      </div>
+
+      <div class="panel battle-setup">
+        <div class="field">
+          <label>Case</label>
+          <select id="battle-case"></select>
+        </div>
+        <div class="field">
+          <label>Openings</label>
+          <div class="segbtns" id="battle-count">
+            <button data-count="1">1</button><button data-count="2">2</button><button data-count="3" class="active">3</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Total cost</label>
+          <div class="total-cost">🪙 <b id="battle-cost">300</b></div>
+        </div>
+        <div class="field grow">
+          <button class="btn btn-primary big" id="battle-start">Find opponent</button>
+        </div>
+      </div>
+
+      <div class="panel battle-stage" id="battle-stage">
+        <div class="battle-side">
+          <div class="battle-name" id="battle-you-name">You</div>
+          <div class="reel"><div class="reel-track" id="reel-you"></div><div class="reel-marker"></div></div>
+          <div class="battle-total" id="battle-you-total">🪙 0</div>
+        </div>
+        <div class="battle-vs" id="battle-verdict">VS</div>
+        <div class="battle-side">
+          <div class="battle-name" id="battle-bot-name">—</div>
+          <div class="reel"><div class="reel-track" id="reel-bot"></div><div class="reel-marker"></div></div>
+          <div class="battle-total" id="battle-bot-total">🪙 0</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ COINFLIP ============================ -->
+    <section class="view" id="view-coinflip">
+      <div class="view-head">
+        <div>
+          <h2>Coinflip 1v1</h2>
+          <p>A 50/50 against a simulated opponent. Winner pays a 2.5% rake, exactly like the sites this emulates.</p>
+        </div>
+        <div class="head-badges"><span class="chip">pays 1.95×</span><span class="chip chip-warn">2.5% rake</span></div>
+      </div>
+
+      <div class="cf-grid">
+        <div class="panel cf-stage">
+          <div class="cf-coin" id="cf-coin"><span class="cf-face cf-heads">👑</span><span class="cf-face cf-tails">⚡</span></div>
+          <div class="cf-vs">
+            <div class="cf-player"><span class="avatar" id="cf-you-avatar"></span><b id="cf-you-name">You</b><i id="cf-you-side">choosing…</i></div>
+            <div class="cf-verdict" id="cf-verdict">Choose a side</div>
+            <div class="cf-player"><span class="avatar" id="cf-bot-avatar"></span><b id="cf-bot-name">—</b><i id="cf-bot-side">—</i></div>
+          </div>
+        </div>
+        <div class="panel cf-controls">
+          <div class="field">
+            <label>Side</label>
+            <div class="segbtns" id="cf-side">
+              <button data-side="heads" class="active">👑 Heads</button>
+              <button data-side="tails">⚡ Tails</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="cf-amount">Bet amount</label>
+            <div class="input-row"><span class="coin">🪙</span><input id="cf-amount" type="number" min="10" step="10" value="100"></div>
+            <div class="quick-row" id="cf-quick">
+              <button data-cf-amt="10">10</button><button data-cf-amt="100">100</button>
+              <button data-cf-amt="500">500</button><button data-cf-amt="half">½</button>
+              <button data-cf-amt="double">2×</button><button data-cf-amt="max">max</button>
+            </div>
+          </div>
+          <button class="btn btn-primary big" id="cf-flip">Flip for 🪙 <span id="cf-btn-amount">100</span></button>
+          <div class="cf-history">
+            <header class="panel-head"><h3>Your last flips</h3></header>
+            <ul id="cf-history"><li class="muted">No flips yet.</li></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ MINES ============================ -->
+    <section class="view" id="view-mines">
+      <div class="view-head">
+        <div>
+          <h2>Mines</h2>
+          <p>Reveal gems, avoid the mines, cash out whenever. More mines = higher multiplier and higher chance of losing everything.</p>
+        </div>
+        <div class="head-badges"><span class="chip chip-warn">3% rake</span><span class="chip" id="mines-odds">no active round</span></div>
+      </div>
+
+      <div class="mines-grid-wrap">
+        <div class="panel mines-board-panel">
+          <div class="mines-board" id="mines-board"></div>
+        </div>
+        <div class="panel mines-controls">
+          <div class="field">
+            <label for="mines-bet">Bet amount</label>
+            <div class="input-row"><span class="coin">🪙</span><input id="mines-bet" type="number" min="10" step="10" value="100"></div>
+          </div>
+          <div class="field">
+            <label>Mines</label>
+            <div class="segbtns" id="mines-count">
+              <button data-mines="1">1</button><button data-mines="2">2</button><button data-mines="3" class="active">3</button>
+              <button data-mines="4">4</button><button data-mines="5">5</button>
+            </div>
+          </div>
+          <div class="mines-stats">
+            <div><span>Gems found</span><b id="mines-found">0</b></div>
+            <div><span>Multiplier</span><b id="mines-mult">1.00x</b></div>
+            <div><span>Next tile</span><b id="mines-next">1.29x</b></div>
+          </div>
+          <button class="btn btn-primary big" id="mines-start">Start round</button>
+          <button class="btn btn-ghost wide" id="mines-cashout" disabled>Cash out 🪙 <span id="mines-payout">0</span></button>
+          <small class="muted">Odds are computed on the server; the board is generated before your first click, so clicking fast does not change anything.</small>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ INVENTORY ============================ -->
+    <section class="view" id="view-inventory">
+      <div class="view-head">
+        <div>
+          <h2>Inventory</h2>
+          <p>Everything you've unboxed. Sell items back for coins — no marketplaces, no trades, no real value of any kind.</p>
+        </div>
+        <div class="head-badges">
+          <span class="chip"><span id="inv-count">0</span> items</span>
+          <span class="chip">worth 🪙 <span id="inv-total">0</span></span>
+        </div>
+      </div>
+      <div class="inv-actions">
+        <button class="btn btn-ghost" id="inv-sell-dupes">Sell all below 🪙 100</button>
+        <button class="btn btn-ghost" id="inv-sell-all">Sell everything</button>
+      </div>
+      <div class="inv-grid" id="inv-grid"></div>
+      <div class="empty-note" id="inv-empty">Nothing here yet. Go lose some fake money in the Cases tab.</div>
+    </section>
+
+    <!-- ============================ LEADERBOARD ============================ -->
+    <section class="view" id="view-leaderboard">
+      <div class="view-head">
+        <div>
+          <h2>Leaderboard</h2>
+          <p>Net worth = coins + inventory value. Every name here except yours is a simulated bot with a scripted personality.</p>
+        </div>
+        <div class="head-badges"><span class="chip chip-warn">bots get free instant rebuys</span></div>
+      </div>
+      <div class="panel">
+        <table class="lb-table">
+          <thead><tr><th>#</th><th>Player</th><th>Level</th><th>Net worth</th><th>Today</th></tr></thead>
+          <tbody id="lb-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================ ABOUT ============================ -->
+    <section class="view" id="view-about">
+      <div class="view-head">
+        <div>
+          <h2>How this works (read me)</h2>
+          <p>This is a simulation of a skin-gambling site. It is built to be honest about the maths that real sites hide.</p>
+        </div>
+      </div>
+      <div class="about-grid">
+        <div class="panel about-card">
+          <h3>💸 There is no real money here</h3>
+          <ul>
+            <li>No deposits, no withdrawals, no payments, no crypto, no card forms. There is literally no code for it.</li>
+            <li>Coins are free: you start with 2,500 and can claim a free drop every 2 minutes, forever.</li>
+            <li>Items are invented ("Vector-9 | Holo Bloom" is not a real thing) and have no resale value anywhere.</li>
+            <li>Nothing here can be traded, transferred or redeemed. If a site ever <em>does</em> let you do those things, it stops being a game and starts being gambling.</li>
+          </ul>
+        </div>
+        <div class="panel about-card">
+          <h3>🤖 The other players are fake</h3>
+          <ul>
+            <li>26 scripted bots with fake names, fake balances, fake inventories and fake moods.</li>
+            <li>They chat, they tilt, they "hit big", they "rebuy" instantly when they bust — because they are code, not people.</li>
+            <li>They carry a <b>BOT</b> badge in chat and in the round list. Real sites use fake activity to make rooms feel busy; here it's labelled.</li>
+            <li>Your chat messages get canned bot replies. They do not understand you. They never will.</li>
+          </ul>
+        </div>
+        <div class="panel about-card">
+          <h3>📉 The maths that always wins</h3>
+          <ul>
+            <li>Cases return ~90% of their price on average (the odds table is inside every case).</li>
+            <li>Crash has 1% instant-bust rounds, and ~50% of rounds die before 2.00x.</li>
+            <li>Coinflip pays 1.95× on a 50/50 — a 2.5% cut.</li>
+            <li>Mines uses fair-but-raked odds (3%).</li>
+            <li>Those tiny edges are why an account can be up for a night and still be down over a month. That is not bad luck, it is arithmetic.</li>
+          </ul>
+        </div>
+        <div class="panel about-card">
+          <h3>🧪 What you can safely do here</h3>
+          <ul>
+            <li>Play with coins until you're bored. Watch how a 200-coin balance behaves over 100 rounds.</li>
+            <li>Test "strategies" (martingale on coinflip is a fun way to watch a stack vanish).</li>
+            <li>Use it to see what these sites do to your judgement without paying for the lesson.</li>
+            <li>Then close the tab. There is no bonus waiting for you, no streak to protect, no vault to unlock.</li>
+          </ul>
+        </div>
+        <div class="panel about-card wide">
+          <h3>🆘 If this stops being a game</h3>
+          <p>Real versions of this exist, they are engineered by very good designers to keep you clicking, and free demo sims like this one can still hook the same reflexes. If gambling is affecting your money, sleep, relationships or mood, that is a medical and financial problem with good help available — talk to someone you trust or a local gambling support service. This page will never ask you for a cent, and you should be suspicious of anything that does.</p>
+          <p class="muted">Built as a simulation, not as a product. No analytics, no ads, no accounts, no tracking beyond your own browser.</p>
+        </div>
+      </div>
+      <div class="panel danger-zone">
+        <div>
+          <h3>Danger zone</h3>
+          <p class="muted">Reset your fake profile (coins, level, inventory) back to the starting 2,500. It changes nothing real, because nothing here is real.</p>
+        </div>
+        <button class="btn btn-danger" id="reset-btn">Reset profile</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================ RAIL ============================ -->
+  <aside class="rail">
+    <div class="panel rail-panel feed-panel">
+      <header class="panel-head">
+        <h3>Live wins</h3>
+        <span class="pulse-dot" title="updating"></span>
+      </header>
+      <ul class="feed-list" id="feed-list"></ul>
+    </div>
+    <div class="panel rail-panel chat-panel">
+      <header class="panel-head">
+        <h3>Chat</h3>
+        <span class="muted" id="chat-count">0 online</span>
+      </header>
+      <ul class="chat-list" id="chat-list"></ul>
+      <form class="chat-form" id="chat-form">
+        <input id="chat-input" maxlength="120" placeholder="say something…" autocomplete="off">
+        <button type="submit" class="btn btn-primary">Send</button>
+      </form>
+    </div>
+  </aside>
+</div>
+
+<footer class="footer">
+  <span>NEONROLL is a <b>fake-currency simulation</b> for entertainment and education. It has no payments, no withdrawals and no real-world value.</span>
+  <span class="footer-right">All "skins" and "players" are invented · 18+ themes handled with fake money · If you want to gamble for real, talk to a professional first, not a website.</span>
+</footer>
+
+<!-- Case modal -->
+<div class="modal-root" id="modal-root" hidden>
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal" id="modal-card">
+    <header class="modal-head">
+      <h3 id="modal-title">Case</h3>
+      <button class="btn btn-ghost icon" data-close="1">✕</button>
+    </header>
+    <div class="modal-body" id="modal-body"></div>
+    <footer class="modal-foot" id="modal-foot"></footer>
+  </div>
+</div>
+
+<!-- Name modal -->
+<div class="modal-root" id="name-root" hidden>
+  <div class="modal-backdrop"></div>
+  <div class="modal slim">
+    <header class="modal-head"><h3>Pick a display name</h3></header>
+    <div class="modal-body">
+      <p class="muted">Shown in chat, in the round list and on the leaderboard. Nothing is verified, nothing is stored on a server you don't control — but it's a fake casino, so pick something embarrassing.</p>
+      <div class="input-row big"><span>😎</span><input id="name-input" maxlength="14" placeholder="e.g. SoldAt1Point2" value=""></div>
+    </div>
+    <footer class="modal-foot">
+      <button class="btn btn-primary big" id="name-save">Start with 🪙 2,500 free coins</button>
+    </footer>
+  </div>
+</div>
+
+<div class="toast-root" id="toast-root"></div>
+
+<script src="core.js"></script>
+<script src="games.js"></script>
+</body>
+</html>
