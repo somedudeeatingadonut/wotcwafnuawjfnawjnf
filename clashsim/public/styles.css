@@ -580,6 +580,14 @@ select { background: #0b0e16; border: 1px solid var(--line-2); border-radius: va
   .topbar-right .btn-ghost.icon { display: none; }
   .canvas-wrap, #crash-canvas { height: 220px; }
 }
+/* Reduced motion: decorative effects calm down. Anything that carries meaning
+   (the case reel, the battle reels) is NOT flattened here — those are animated
+   by requestAnimationFrame in cases.js, which no CSS rule can override. A
+   blanket `transition-duration: .01ms !important` used to live in this block
+   and silently turned the reel into an instant jump for anyone whose OS has
+   reduce-motion switched on. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .01ms !important; }
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
+  .roll-track, .battle-reel, .battle-reel-track { transition: none !important; }
+  .case-card:hover, .nav-item, .btn { transition-duration: .01ms !important; }
 }

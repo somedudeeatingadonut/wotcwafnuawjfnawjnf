@@ -5,6 +5,89 @@
    always stops on the item that was actually pulled.
    ========================================================================== */
 
+/* --------------------------------------------------------------- the reel
+ * The reel used to move with a CSS transition, and one global rule in
+ * styles.css — the prefers-reduced-motion guard that flattens every
+ * transition-duration to 0.01ms — turned that into an instant jump: the reel
+ * "stayed stuck in one place" for anyone whose OS has reduce-motion on.
+ * Now the scroll is driven by requestAnimationFrame: no transition, no
+ * override, and a short-but-real scroll for reduce-motion users instead of
+ * no motion at all.
+ */
+
+const reelEase = (p) => 1 - Math.pow(1 - p, 5);          // long, slow landing
+const reelEaseGentle = (p) => 1 - Math.pow(1 - p, 2.4);  // reduced-motion scroll
+
+/** Animate an element's transform with rAF. `done` runs exactly once. */
+function animateTrack(el, axis, from, to, duration, ease, done) {
+  let finished = false;
+  const write = (v) => {
+    el.style.transform = axis === 'Y'
+      ? `translate3d(0, ${v.toFixed(2)}px, 0)`
+      : `translate3d(${v.toFixed(2)}px, 0, 0)`;
+  };
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    write(to);
+    if (done) done();
+  };
+  el.style.transition = 'none';
+  write(from);
+  const t0 = performance.now();
+  const frame = (now) => {
+    if (finished) return;
+    const p = duration <= 0 ? 1 : Math.min(1, (now - t0) / duration);
+    write(from + (to - from) * ease(p));
+    if (p < 1) requestAnimationFrame(frame);
+    else finish();
+  };
+  requestAnimationFrame(frame);
+  // belt and braces: rAF is throttled in a background tab, so make sure the
+  // result still lands (and is revealed) on time
+  setTimeout(finish, Math.max(0, duration) + 150);
+}
+
+/** Item pitch of a flex track, measured — with constants as a safety net. */
+/** Item pitch of a flex track, measured — with constants as a safety net. */
+function trackStep(track, axis, fallback) {
+  const kids = track.children;
+  if (kids.length >= 2) {
+    const a = kids[0].getBoundingClientRect();
+    const b = kids[1].getBoundingClientRect();
+    const delta = axis === 'Y' ? (b.top - a.top) : (b.left - a.left);
+    if (delta > 0) return delta;               // pitch including the flex gap
+  }
+  const first = kids[0] && kids[0].getBoundingClientRect();
+  const size = first ? (axis === 'Y' ? first.height : first.width) : 0;
+  if (size > 0) return size;
+  return fallback;
+}
+
+/** How far to translate a reel so the middle winner sits under the pointer.
+ *  Everything except the pixel pitch comes from live rects (padding, gap,
+ *  borders included), so this keeps working at any width or font size.
+ *  Returns a positive "move the track left/up by this much" amount; the
+ *  caller animates to `-distance`. */
+function reelDistance(track, win, axis, itemCount, lead, jitter) {
+  const trackRect = track.getBoundingClientRect();
+  const winRect = win.getBoundingClientRect();
+  const first = track.firstElementChild;
+  const firstRect = first ? first.getBoundingClientRect() : null;
+  const vertical = axis === 'Y';
+  const fallbackStep = vertical ? 96 : 129.6;
+  const step = trackStep(track, axis, fallbackStep);
+  const size = firstRect ? (vertical ? firstRect.height : firstRect.width) : step;
+  const winSize = (vertical ? winRect.height : winRect.width) || (vertical ? 190 : 600);
+  // where item 0 starts, relative to the track's own box (padding, borders)
+  const pad = firstRect ? (vertical ? firstRect.top - trackRect.top : firstRect.left - trackRect.left) : 0;
+  // where the track's box starts, relative to the window's box
+  const offset = (vertical ? trackRect.top - winRect.top : trackRect.left - winRect.left) || 0;
+  const centreIndex = lead + (itemCount - 1) / 2;
+  const winnerCentre = offset + pad + centreIndex * step + size / 2;
+  return Math.max(0, winnerCentre - winSize / 2 + (jitter || 0));
+}
+
 /* ------------------------------------------------------------ case grid */
 
 function oddsBars(caseDef) {
@@ -187,46 +270,45 @@ async function openCaseFlow(caseDef, count) {
   function buildTrack(items) {
     track.innerHTML = '';
     track.style.transition = 'none';
-    track.style.transform = 'translateX(0px)';
+    track.style.transform = 'translate3d(0, 0, 0)';
     filler(FILL, 0);
     items.forEach((it, i) => track.appendChild(itemEl(it, { small: true, uid: 'w' + i })));
     filler(TAIL, FILL);
   }
 
   function spinReel() {
-    if (spinning) return;
-    const items = Array.from(track.children);
-    if (!items.length) return;
-    // the winner group sits just before the tail; centre the middle of it
-    const firstWin = FILL;
-    const lastWin = FILL + payload.items.length - 1;
-    const target = items[Math.floor((firstWin + lastWin) / 2)];
-    if (!target) return;
-
+    if (spinning || !payload) return;
+    if (!track.children.length) return;
     spinning = true;
     audio.gear();
 
-    // measured position, not a guess based on CSS assumptions
-    const winRect = win.getBoundingClientRect();
-    const itemRect = target.getBoundingClientRect();
-    if (!winRect.width || !itemRect.width) { spinning = false; reveal(); return; }
-    const jitter = (Math.random() - 0.5) * itemRect.width * 0.4;
-    const delta = (winRect.left + winRect.width / 2) - (itemRect.left + itemRect.width / 2) + jitter;
+    // keep the reel on screen: the Open button sits below it in the modal
+    try {
+      const body = win.closest('.modal-body') || win.parentElement;
+      if (body && typeof win.scrollIntoView === 'function') win.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } catch (e) { /* cosmetic only */ }
 
-    requestAnimationFrame(() => {
-      track.style.transition = 'transform 3.4s cubic-bezier(.1,.72,.06,1)';
-      track.style.transform = `translateX(${delta}px)`;
-    });
+    const n = payload.items.length;
+    const step = trackStep(track, 'X', 129.6);
+    const jitter = (Math.random() - 0.5) * step * 0.3;
+    const distance = reelDistance(track, win, 'X', n, FILL, jitter);
 
-    // short reel clicks, hard-capped so the audio never piles up
+    const duration = reduceMotion ? 750 : 3400;
+    const ease = reduceMotion ? reelEaseGentle : reelEase;
+
+    // reel clicks, hard-capped so the audio never piles up
     let ticks = 0;
     const ticker = setInterval(() => {
       ticks++;
       if (ticks > 18) return clearInterval(ticker);
       audio.tone(480 + ((ticks * 37) % 300), 16, 'square', 0.008);
-    }, 150);
+    }, Math.max(45, duration / 22));
 
-    setTimeout(() => { clearInterval(ticker); spinning = false; reveal(); }, 3480);
+    animateTrack(track, 'X', 0, -distance, duration, ease, () => {
+      clearInterval(ticker);
+      spinning = false;
+      reveal();
+    });
   }
 
   function reveal() {
@@ -367,6 +449,7 @@ async function runBattle() {
 }
 
 /** Vertical reel that scrolls to an item, measured from the DOM (no CSS guessing). */
+/** Vertical reel, same rAF treatment as the case reel. */
 function spinVertical(track, items, duration) {
   return new Promise((resolve) => {
     const lead = 8;
@@ -378,24 +461,22 @@ function spinVertical(track, items, duration) {
     };
     track.innerHTML = '';
     track.style.transition = 'none';
-    track.style.transform = 'translateY(0px)';
+    track.style.transform = 'translate3d(0, 0, 0)';
     blank(lead, 'l');
     items.forEach((it, i) => track.appendChild(itemEl(it, { small: true, uid: 'r' + i })));
     blank(tail, 't');
 
-    requestAnimationFrame(() => {
-      const children = Array.from(track.children);
-      const target = children[Math.floor((lead + lead + items.length - 1) / 2)];
-      const reel = track.parentElement;
-      if (!target || !reel) return resolve();
-      const reelRect = reel.getBoundingClientRect();
-      const itemRect = target.getBoundingClientRect();
-      if (!itemRect.height) return resolve();
-      const delta = (reelRect.top + reelRect.height / 2) - (itemRect.top + itemRect.height / 2);
-      track.style.transition = `transform ${duration}ms cubic-bezier(.1,.75,.08,1)`;
-      track.style.transform = `translateY(${delta}px)`;
-      setTimeout(resolve, duration + 60);
-    });
+    const go = () => {
+      const reel = track.parentElement || track;
+      const step = trackStep(track, 'Y', 96);
+      const jitter = (Math.random() - 0.5) * step * 0.3;
+      const distance = reelDistance(track, reel, 'Y', items.length, lead, jitter);
+      const ms = reduceMotion ? Math.min(600, duration || 600) : (duration || 2200);
+      animateTrack(track, 'Y', 0, -distance, ms, reduceMotion ? reelEaseGentle : reelEase, () => resolve());
+    };
+
+    // one frame for layout, so the measured pitch is real
+    requestAnimationFrame(go);
   });
 }
 

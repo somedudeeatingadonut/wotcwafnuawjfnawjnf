@@ -26,7 +26,19 @@ Zero dependencies — Node 18+ and nothing else (`node:http`, `node:fs`,
 PORT=8080 HOST=127.0.0.1 node server.js   # bind somewhere else
 npm run smoke                             # 41 checks, spawns its own scratch server
 node tools/smoke.js http://localhost:3000 # or test a server that is already running
+
+npm run test:reel                         # drives a real Chromium and watches the reel move
+node tools/reel-check.js http://localhost:3000
 ```
+
+`npm run test:reel` is the test a DOM stub cannot write: jsdom gives every element
+a zero-sized rect and runs no animations, so a motionless reel passes a jsdom
+suite. This one counts how many distinct on-screen positions the reel passes
+through, in normal motion *and* with `prefers-reduced-motion: reduce`, and checks
+the winner lands under the pointer. It needs `puppeteer-core` and
+`@sparticuz/chromium` (`npm i -D puppeteer-core @sparticuz/chromium`, or point
+`CLASH_BROWSER_DIR` at a folder that has them); without them it prints SKIP and
+exits 0 rather than failing a machine that cannot run a browser.
 
 ## The rules it plays by
 
@@ -107,7 +119,7 @@ The API is small: `GET /api/config · /api/case?id= · /api/samples?id=&n=`,
 off this one polling call, with deltas so the feed and chat never repeat), and
 `POST /api/<action>` for everything in `lib/games.js`.
 
-## Two bugs this build fixes, kept honest by tests
+## Four bugs this build fixes, kept honest by tests
 
 1. **Case opening did not work.** Opening a case now debits gems, rolls the items
    server-side, puts them straight into your inventory, and the reel scrolls to the
@@ -119,6 +131,22 @@ off this one polling call, with deltas so the feed and chat never repeat), and
    on sounds in flight, a 240 ms gate on the crash ticker, and a per-round flag so
    the bust sound fires exactly once. The sound is muted by default in no case —
    there is a 🔊 button in the header, and your choice is remembered.
+3. **The reel still would not move.** Reported twice. The first fix landed the
+   right item but still animated it with a CSS transition, and the
+   `@media (prefers-reduced-motion: reduce)` block in `styles.css` flattened
+   *every* `transition-duration` to `0.01ms !important` — so for anyone whose OS
+   has reduce-motion switched on, the reel jumped straight to the finished state
+   and "stayed stuck in one place". Two changes: the reel is now scrolled by
+   `requestAnimationFrame` in `cases.js` (no transition to override, and a real
+   750 ms scroll for reduce-motion users instead of no motion at all), and the
+   reduced-motion block only calms decorative effects, never meaningful motion.
+   `npm run test:reel` is the guard against a relapse: with the old
+   transition-driven reel that rule left the reduced-motion case reporting a
+   single track position, where it now reports a real (if shorter) scroll.
+4. **Item art and case art never appeared.** Items were plain cards when the
+   Steam CDN was unreachable. Every case and item now has a generated SVG
+   fallback (`caseFallbackArt()`) that is drawn from the item's own name and
+   rarity colour, so the grid is never empty.
 
 ## Notes on the data and the art
 
