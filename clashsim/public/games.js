@@ -3,9 +3,7 @@
    The browser only draws what the server already decided.
    ========================================================================== */
 
-const reduceMotion = (() => {
-  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
-})();
+/* `reduceMotion` (and the reel-speed profiles) live in core.js. */
 
 /** Size a canvas to its CSS box (DPR aware) and hand back a clean 2d context. */
 function gfx(canvas) {

@@ -35,6 +35,10 @@
       <span class="gem">💎</span><span id="gems-value">0.00</span><span class="gems-label">Gems</span>
     </button>
     <button class="btn btn-gem" id="bonus-btn" title="Free gems, forever. No purchase code exists here.">Free Gems</button>
+    <label class="reel-speed-field" title="Case & battle reel speed — slower speeds walk past more items">
+      <span>Reel</span>
+      <select class="reel-speed-select" data-reel-speed aria-label="Reel speed"></select>
+    </label>
     <button class="btn btn-ghost icon" id="sound-btn" title="Sound on/off">🔊</button>
     <button class="btn btn-ghost icon" data-goto="rewards" title="Rewards">🎁</button>
     <button class="btn btn-ghost icon" data-goto="race" title="10K Daily Race">🏁</button>
@@ -177,6 +181,7 @@
           </div>
         </div>
         <div class="field"><label>Entry</label><div class="total-cost">💎 <b id="battle-cost">0</b></div></div>
+        <div class="field"><label>Reel speed</label><select data-reel-speed aria-label="Reel speed"></select></div>
         <div class="field grow"><button class="btn btn-primary big" id="battle-start">Create battle</button></div>
       </div>
 

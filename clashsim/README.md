@@ -34,8 +34,10 @@ node tools/reel-check.js http://localhost:3000
 `npm run test:reel` is the test a DOM stub cannot write: jsdom gives every element
 a zero-sized rect and runs no animations, so a motionless reel passes a jsdom
 suite. This one counts how many distinct on-screen positions the reel passes
-through, in normal motion *and* with `prefers-reduced-motion: reduce`, and checks
-the winner lands under the pointer. It needs `puppeteer-core` and
+through in every speed, pins the durations (Normal ≈ 3× Quick), checks the winner
+lands under the pointer, that clicking the reel skips to the result, that zero
+sized rects still animate, and that motion survives
+`prefers-reduced-motion: reduce`. It needs `puppeteer-core` and
 `@sparticuz/chromium` (`npm i -D puppeteer-core @sparticuz/chromium`, or point
 `CLASH_BROWSER_DIR` at a folder that has them); without them it prints SKIP and
 exits 0 rather than failing a machine that cannot run a browser.
@@ -106,6 +108,7 @@ clashsim/
   public/styles.css      dark/violet theme, responsive, reduced-motion aware
   public/core.js         session, polling with chat/feed deltas, sound, router, inventory
   public/cases.js        case grid + the measured reel + battles
+  public/core.js         session, sound, feeds · the reel-speed profiles
   public/games.js        crash · double · upgrader · mines · plinko · tiles · champion
   public/catalog.json    generated — 12 cases, 314 items (never hand-edit)
   tools/build-catalog.js generator + pricing model
@@ -147,6 +150,25 @@ off this one polling call, with deltas so the feed and chat never repeat), and
    Steam CDN was unreachable. Every case and item now has a generated SVG
    fallback (`caseFallbackArt()`) that is drawn from the item's own name and
    rarity colour, so the grid is never empty.
+
+## Reel speed
+
+The real case reel is a component in the clash.gg bundle that walks 70 positions
+(`startPosition: 10, finalPosition: 80, itemCount: 90`) over `duration ?? 6`
+seconds, after `delay ?? 1.5`, eased with `cubic-bezier(.1, 0, .2, 1)`. That shape
+is the default here, and the pace is a setting — pick it in the header, in the
+case modal footer, or on the Battles page; the choice is stored and applies to
+battles too.
+
+| | spin time | items walked | notes |
+| --- | --- | --- | --- |
+| Turbo | 1.2 s | ~10 | the default under `prefers-reduced-motion` |
+| Quick | 3.4 s | ~24 | the old fixed pace |
+| **Normal** | **10.2 s** | **~70** | the default: ~3× Quick, matched to the real reel |
+| Slow | 16 s | ~110 | shows the most items |
+
+Click the reel while it spins to skip straight to a result that was already
+decided server-side — the skip never changes what you get.
 
 ## Notes on the data and the art
 

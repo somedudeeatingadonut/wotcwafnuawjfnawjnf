@@ -24,6 +24,75 @@ const state = {
   done: {},
 };
 
+/* --------------------------------------------------------- motion & speed */
+
+/** True when the OS asks for reduced motion. Defined here because the reel
+ *  speed default below depends on it (games.js used to declare it). */
+const reduceMotion = (() => {
+  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+})();
+
+/* Reel speeds.
+ *
+ * The real case reel in the clash.gg bundle is a component that walks 70
+ * positions — `startPosition: 10, finalPosition: 80, itemCount: 90` — over
+ * `duration ?? 6` seconds, after `delay ?? 1.5`, eased with cubic-bezier
+ * (.1, 0, .2, 1). These profiles keep that shape and make the pace a choice;
+ * `traverse` is how many items the reel walks past, so a slower speed shows
+ * you more items rather than crawling through the same handful. */
+const REEL_SPEEDS = {
+  turbo:  { label: 'Turbo',  caseMs: 1200,  battleMs: 800,   traverse: 10 },
+  quick:  { label: 'Quick',  caseMs: 3400,  battleMs: 2200,  traverse: 24 },
+  normal: { label: 'Normal', caseMs: 10200, battleMs: 6600,  traverse: 70 },
+  slow:   { label: 'Slow',   caseMs: 16000, battleMs: 10400, traverse: 110 },
+};
+const REEL_SPEED_KEYS = ['turbo', 'quick', 'normal', 'slow'];
+
+let reelSpeedKey = null;
+
+/** The active profile, with everything the reel code needs derived from it. */
+function reelSpeedProfile() {
+  if (!reelSpeedKey) {
+    let saved = null;
+    try { saved = localStorage.getItem('clashsim.reelSpeed'); } catch { saved = null; }
+    // an explicit choice always wins, even over the OS reduced-motion default
+    reelSpeedKey = REEL_SPEED_KEYS.includes(saved) ? saved : (reduceMotion ? 'turbo' : 'normal');
+  }
+  const prof = { ...REEL_SPEEDS[reelSpeedKey], key: reelSpeedKey };
+  prof.pace = prof.traverse / (prof.caseMs / 1000);                    // items per second
+  prof.delayMs = Math.min(1500, Math.round(prof.caseMs * 0.15));       // clash starts at 1.5s
+  prof.settleMs = Math.round(prof.caseMs * 0.04);                      // beat before the reveal
+  prof.itemsFor = (ms) => Math.max(6, Math.round((ms / 1000) * prof.pace));
+  return prof;
+}
+
+function setReelSpeed(key) {
+  if (!REEL_SPEED_KEYS.includes(key)) return;
+  reelSpeedKey = key;
+  try { localStorage.setItem('clashsim.reelSpeed', key); } catch { /* private mode */ }
+  $$('[data-reel-speed]').forEach((sel) => { if (sel.value !== key) sel.value = key; });
+}
+
+/** Fill every <select data-reel-speed> on the page and keep them in sync. */
+function initReelSpeed() {
+  const current = reelSpeedProfile();
+  $$('[data-reel-speed]').forEach((sel) => {
+    if (!sel.options.length) {
+      REEL_SPEED_KEYS.forEach((k) => {
+        const opt = document.createElement('option');
+        opt.value = k;
+        opt.textContent = REEL_SPEEDS[k].label;
+        sel.appendChild(opt);
+      });
+    }
+    sel.value = current.key;
+    if (!sel.dataset.reelSpeedWired) {
+      sel.dataset.reelSpeedWired = '1';
+      sel.addEventListener('change', () => setReelSpeed(sel.value));
+    }
+  });
+}
+
 /* ------------------------------------------------------------- utilities */
 
 const fmt = (n, d = 0) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -741,6 +810,7 @@ function startPolling() {
 
 loadSoundPref();
 $('#sound-btn').textContent = audio.enabled ? '🔊' : '🔇';
+initReelSpeed();
 
 (function start() {
   try { state.pid = localStorage.getItem('clashsim.pid'); } catch { state.pid = null; }

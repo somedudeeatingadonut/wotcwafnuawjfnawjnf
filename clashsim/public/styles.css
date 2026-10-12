@@ -312,6 +312,21 @@ button { cursor: pointer; }
 .roll-pointer::before { top: -1px; border-top-color: var(--gem); }
 .roll-pointer::after { bottom: -1px; border-bottom-color: var(--gem); }
 .roll-fade { position: absolute; inset: 0; pointer-events: none; z-index: 2; background: linear-gradient(90deg, #090c14, transparent 12%, transparent 88%, #090c14); }
+/* the reel is click-to-skip while it spins, so say so with the cursor */
+.roll-window { cursor: default; }
+.roll-window.rolling { cursor: pointer; }
+.roll-window.rolling .roll-pointer { animation: reel-pulse .9s ease-in-out infinite; }
+@keyframes reel-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* reel speed picker (header, case modal footer, battle setup) */
+.reel-speed-field { display: inline-flex; align-items: center; gap: .35rem; font-size: .72rem; color: var(--muted); }
+.reel-speed-field > span { text-transform: uppercase; letter-spacing: .04em; }
+.reel-speed-select {
+  background: #0d1120; color: var(--text); border: 1px solid var(--line-2); border-radius: 8px;
+  padding: .28rem .4rem; font: inherit; font-size: .78rem; cursor: pointer;
+}
+.reel-speed-select:hover { border-color: var(--gem); }
+.reel-speed-field.modal-speed { margin-right: auto; }
 .pull-result { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: .5rem; }
 .result-banner { text-align: center; font-weight: 800; padding: .5rem; border-radius: 10px; font-size: .92rem; }
 .result-banner.good { background: rgba(56,232,160,.12); border: 1px solid #38e8a055; color: #9ff5cd; }

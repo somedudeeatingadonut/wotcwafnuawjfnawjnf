@@ -15,10 +15,41 @@
  * no motion at all.
  */
 
-const reelEase = (p) => 1 - Math.pow(1 - p, 5);          // long, slow landing
-const reelEaseGentle = (p) => 1 - Math.pow(1 - p, 2.4);  // reduced-motion scroll
+/* The real case reel eases with cubic-bezier(.1, 0, .2, 1) — that is the
+ * value in the clash.gg bundle — so the landing feels the same here. */
+function cubicBezier(x1, y1, x2, y2) {
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+  const sx = (t) => ((ax * t + bx) * t + cx) * t;
+  const sy = (t) => ((ay * t + by) * t + cy) * t;
+  const dx = (t) => (3 * ax * t + 2 * bx) * t + cx;
+  return (x) => {
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    let t = x;
+    for (let i = 0; i < 8; i++) {                       // Newton–Raphson
+      const err = sx(t) - x;
+      if (Math.abs(err) < 1e-5) return sy(t);
+      const slope = dx(t);
+      if (Math.abs(slope) < 1e-6) break;
+      t -= err / slope;
+    }
+    let lo = 0, hi = 1;                                  // bisection fallback
+    t = x;
+    for (let i = 0; i < 24; i++) {
+      const v = sx(t);
+      if (Math.abs(v - x) < 1e-5) break;
+      if (v > x) hi = t; else lo = t;
+      t = (lo + hi) / 2;
+    }
+    return sy(t);
+  };
+}
 
-/** Animate an element's transform with rAF. `done` runs exactly once. */
+const reelEase = cubicBezier(0.1, 0, 0.2, 1);            // the bundle's case-reel ease
+
+/** Animate an element's transform with rAF. `done` runs exactly once and the
+ *  returned handle can cut the wait short (the reel is click-to-skip). */
 function animateTrack(el, axis, from, to, duration, ease, done) {
   let finished = false;
   const write = (v) => {
@@ -46,6 +77,7 @@ function animateTrack(el, axis, from, to, duration, ease, done) {
   // belt and braces: rAF is throttled in a background tab, so make sure the
   // result still lands (and is revealed) on time
   setTimeout(finish, Math.max(0, duration) + 150);
+  return { finish };
 }
 
 /** Item pitch of a flex track, measured — with constants as a safety net. */
@@ -244,14 +276,25 @@ async function openCaseFlow(caseDef, count) {
   } else if (you.freeCases > 0) {
     footer.push(el('span', 'chip', `🎁 vouchers only cover cases up to 💎 ${fmt(state.cfg.freebies.freeCaseMaxPrice)}`));
   }
+  const speedField = el('label', 'reel-speed-field modal-speed');
+  speedField.title = 'Reel speed for this case and for battles';
+  speedField.appendChild(el('span', null, 'Reel'));
+  const speedSel = el('select', 'reel-speed-select');
+  speedSel.setAttribute('data-reel-speed', '');
+  speedSel.setAttribute('aria-label', 'Reel speed');
+  speedField.appendChild(speedSel);
+  footer.push(speedField);
+
   modal.open(`${caseDef.name} — 💎 ${fmt(caseDef.gems)} each`, body, footer);
+  initReelSpeed();          // fills in the picker inside the modal footer
 
   /* ============ reel: fillers, winners, measured scroll ============ */
 
-  const FILL = 24;      // filler items before the winners
-  const TAIL = 10;      // filler items after, so an end-winner can still centre
+  const TAIL_MIN = 9;   // the real reel keeps 9 items after the winner block
+  let fillCount = 0;    // how much filler sits in front of the winners
   let payload = null;
   let spinning = false;
+  let spinHandle = null;
 
   function filler(n, from) {
     const src = (detail && detail.contents.length) ? detail.contents : [{}];
@@ -268,19 +311,25 @@ async function openCaseFlow(caseDef, count) {
   }
 
   function buildTrack(items) {
+    // How far the reel walks comes from the speed profile: a slower speed shows
+    // more items instead of crawling through the same handful.
+    const prof = reelSpeedProfile();
+    const fill = Math.max(4, prof.traverse - Math.floor((items.length - 1) / 2));
+    const tail = Math.max(TAIL_MIN, Math.ceil(((win.clientWidth || 660) / 2) / 130) + 3);
+    fillCount = fill;
     track.innerHTML = '';
     track.style.transition = 'none';
     track.style.transform = 'translate3d(0, 0, 0)';
-    filler(FILL, 0);
+    filler(fill, 0);
     items.forEach((it, i) => track.appendChild(itemEl(it, { small: true, uid: 'w' + i })));
-    filler(TAIL, FILL);
+    filler(tail, fill + items.length);
   }
 
   function spinReel() {
     if (spinning || !payload) return;
     if (!track.children.length) return;
     spinning = true;
-    audio.gear();
+    const prof = reelSpeedProfile();
 
     // keep the reel on screen: the Open button sits below it in the modal
     try {
@@ -291,25 +340,42 @@ async function openCaseFlow(caseDef, count) {
     const n = payload.items.length;
     const step = trackStep(track, 'X', 129.6);
     const jitter = (Math.random() - 0.5) * step * 0.3;
-    const distance = reelDistance(track, win, 'X', n, FILL, jitter);
+    const distance = reelDistance(track, win, 'X', n, fillCount, jitter);
 
-    const duration = reduceMotion ? 750 : 3400;
-    const ease = reduceMotion ? reelEaseGentle : reelEase;
+    win.classList.add('rolling');
+    win.title = 'Click the reel to skip to the result';
+    banner.textContent = `Rolling… (${prof.label} reel — click the reel to skip)`;
 
-    // reel clicks, hard-capped so the audio never piles up
-    let ticks = 0;
-    const ticker = setInterval(() => {
-      ticks++;
-      if (ticks > 18) return clearInterval(ticker);
-      audio.tone(480 + ((ticks * 37) % 300), 16, 'square', 0.008);
-    }, Math.max(45, duration / 22));
+    // the real site waits 1.5s before the reel moves; the pause scales with speed
+    setTimeout(() => {
+      if (!spinning) return;              // skipped or closed while waiting
+      audio.gear();
 
-    animateTrack(track, 'X', 0, -distance, duration, ease, () => {
-      clearInterval(ticker);
-      spinning = false;
-      reveal();
-    });
+      // reel clicks, hard-capped so the audio never piles up
+      let ticks = 0;
+      const ticker = setInterval(() => {
+        ticks++;
+        if (ticks > 24) return clearInterval(ticker);
+        audio.tone(480 + ((ticks * 37) % 300), 16, 'square', 0.008);
+      }, Math.max(45, prof.caseMs / 26));
+
+      spinHandle = animateTrack(track, 'X', 0, -distance, prof.caseMs, reelEase, () => {
+        clearInterval(ticker);
+        spinHandle = null;
+        setTimeout(() => {
+          win.classList.remove('rolling');
+          spinning = false;
+          reveal();
+        }, prof.settleMs);
+      });
+    }, prof.delayMs);
   }
+
+  // the result is already decided: clicking the reel ends the wait at once
+  win.addEventListener('click', () => { if (spinHandle) spinHandle.finish(); });
+  win.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && spinHandle) { e.preventDefault(); spinHandle.finish(); }
+  });
 
   function reveal() {
     if (!payload) return;
@@ -420,8 +486,8 @@ async function runBattle() {
   audio.gear();
 
   await Promise.all([
-    spinVertical($('#reel-you'), payload.yourPile.items, 2200),
-    spinVertical($('#reel-bot'), payload.oppPile.items, 3000),
+    spinVertical($('#reel-you'), payload.yourPile.items, reelSpeedProfile().battleMs),
+    spinVertical($('#reel-bot'), payload.oppPile.items, Math.round(reelSpeedProfile().battleMs * 1.35)),
   ]);
 
   youTotal.textContent = '💎 ' + fmt(payload.yourPile.total);
@@ -449,10 +515,11 @@ async function runBattle() {
 }
 
 /** Vertical reel that scrolls to an item, measured from the DOM (no CSS guessing). */
-/** Vertical reel, same rAF treatment as the case reel. */
-function spinVertical(track, items, duration) {
+/** Vertical reel: same rAF rules as the case reel, paced by the same profile. */
+function spinVertical(track, items, ms) {
   return new Promise((resolve) => {
-    const lead = 8;
+    const prof = reelSpeedProfile();
+    const lead = Math.min(20, Math.max(6, Math.round(prof.itemsFor(ms) * 0.15)));
     const tail = 12;
     const blank = (n, pre) => {
       for (let i = 0; i < n; i++) {
@@ -471,10 +538,8 @@ function spinVertical(track, items, duration) {
       const step = trackStep(track, 'Y', 96);
       const jitter = (Math.random() - 0.5) * step * 0.3;
       const distance = reelDistance(track, reel, 'Y', items.length, lead, jitter);
-      const ms = reduceMotion ? Math.min(600, duration || 600) : (duration || 2200);
-      animateTrack(track, 'Y', 0, -distance, ms, reduceMotion ? reelEaseGentle : reelEase, () => resolve());
+      animateTrack(track, 'Y', 0, -distance, ms, reelEase, () => resolve());
     };
-
     // one frame for layout, so the measured pitch is real
     requestAnimationFrame(go);
   });
