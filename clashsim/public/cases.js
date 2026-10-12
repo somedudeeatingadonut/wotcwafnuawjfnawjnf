@@ -32,6 +32,20 @@ function oddsRows(caseDef) {
   return wrap;
 }
 
+/** Inline crate art for the two original cases (no Steam image exists for them). */
+function caseFallbackArt() {
+  return `<svg viewBox="0 0 120 92" class="case-fallback" aria-hidden="true">
+    <rect x="12" y="28" width="96" height="52" rx="7" fill="#241f45" stroke="#7c5cff66"/>
+    <rect x="12" y="28" width="96" height="15" rx="6" fill="#372c68" stroke="#7c5cff66"/>
+    <rect x="57" y="28" width="6" height="52" fill="#14122a" opacity=".6"/>
+    <rect x="18" y="50" width="84" height="3" rx="1.5" fill="#7c5cff33"/>
+    <circle cx="60" cy="60" r="8" fill="#ffcf5c" opacity=".9"/>
+    <path d="M60 52.5v15M52.5 60h15" stroke="#1b1a34" stroke-width="2.6" stroke-linecap="round"/>
+    <circle cx="34" cy="60" r="2.5" fill="#38e8a0" opacity=".8"/>
+    <circle cx="86" cy="60" r="2.5" fill="#ff5d5d" opacity=".8"/>
+  </svg>`;
+}
+
 function buildCaseGrid() {
   const grid = $('#case-grid');
   if (!grid) return;
@@ -45,9 +59,9 @@ function buildCaseGrid() {
       img.alt = c.name;
       img.loading = 'lazy';
       img.referrerPolicy = 'no-referrer';
-      img.onerror = () => { img.remove(); art.innerHTML = '<span class="fallback">📦</span>'; };
+      img.onerror = () => { img.remove(); art.innerHTML = caseFallbackArt(); };
       art.appendChild(img);
-    } else art.innerHTML = '<span class="fallback">📦</span>';
+    } else art.innerHTML = caseFallbackArt();
 
     card.appendChild(art);
     card.appendChild(el('div', 'case-tag', `${c.origin === 'original' ? 'clash original' : 'valve case'} · ${c.itemCount} items`));
