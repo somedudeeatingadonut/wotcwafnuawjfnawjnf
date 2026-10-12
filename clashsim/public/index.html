@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>clash.sim — CS2 case opening simulator (fake currency only)</title>
+<meta name="description" content="A fake-currency emulator of a CS2 skin site: case opening, battles, crash, double, upgrader, mines, plinko, tiles and champion jackpot — with simulated bot players. No real money, no deposits, no withdrawals.">
+<meta name="theme-color" content="#0b0d14">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- permanent, non-dismissible: this thing cannot take your money -->
+<div class="demo-strip">
+  <b>SIMULATION</b>
+  <span>fake gems only · no deposits · no payments · no withdrawals · every other player is a bot</span>
+</div>
+
+<header class="topbar">
+  <button class="logo" data-goto="home">
+    <span class="logo-gem">💎</span><span class="logo-text">clash<b>.sim</b></span>
+  </button>
+
+  <nav class="topnav">
+    <button class="topnav-item" data-goto="home">Games</button>
+    <button class="topnav-item free-cases" id="claim-cases-btn" title="Free case vouchers — no purchase anywhere in this build">
+      🎁 Claim Free 3 Cases
+    </button>
+  </nav>
+
+  <div class="topbar-right">
+    <div class="online-pill"><span class="dot"></span><span id="online-count">—</span></div>
+    <button class="gems-pill" id="gems-pill" title="Your fake gem balance">
+      <span class="gem">💎</span><span id="gems-value">0.00</span><span class="gems-label">Gems</span>
+    </button>
+    <button class="btn btn-gem" id="bonus-btn" title="Free gems, forever. No purchase code exists here.">Free Gems</button>
+    <button class="btn btn-ghost icon" id="sound-btn" title="Sound on/off">🔊</button>
+    <button class="btn btn-ghost icon" data-goto="rewards" title="Rewards">🎁</button>
+    <button class="btn btn-ghost icon" data-goto="race" title="10K Daily Race">🏁</button>
+    <button class="user-chip" data-goto="profile">
+      <span class="avatar" id="user-avatar"></span>
+      <span class="user-meta"><b id="user-name">guest</b><i>lvl <span id="user-level">1</span></i></span>
+    </button>
+  </div>
+</header>
+
+<div class="shell">
+  <!-- ---------------------------------------------------------------- nav -->
+  <aside class="sidenav">
+    <div class="nav-group">Originals</div>
+    <button class="nav-item active" data-view="home"><span class="ico">🎮</span><span>Home</span></button>
+    <button class="nav-item" data-view="cases"><span class="ico">📦</span><span>Case Opening</span></button>
+    <button class="nav-item" data-view="battles"><span class="ico">⚔️</span><span>Battles</span></button>
+    <button class="nav-item" data-view="crash"><span class="ico">📈</span><span>Crash</span></button>
+    <button class="nav-item" data-view="double"><span class="ico">🎡</span><span>Double</span></button>
+    <button class="nav-item" data-view="upgrader"><span class="ico">⬆️</span><span>Upgrader</span></button>
+    <button class="nav-item" data-view="mines"><span class="ico">💥</span><span>Mines</span></button>
+    <button class="nav-item" data-view="plinko"><span class="ico">🔻</span><span>Plinko</span></button>
+    <button class="nav-item" data-view="tiles"><span class="ico">🟪</span><span>Tiles</span></button>
+    <button class="nav-item" data-view="champion"><span class="ico">🏆</span><span>Champion <i class="new-tag">NEW</i></span></button>
+    <div class="nav-group">You</div>
+    <button class="nav-item" data-view="inventory"><span class="ico">🎒</span><span>Inventory</span><span class="nav-badge" id="inv-badge">0</span></button>
+    <button class="nav-item" data-view="rewards"><span class="ico">🎁</span><span>Rewards</span></button>
+    <button class="nav-item" data-view="race"><span class="ico">🏁</span><span>Daily Race</span></button>
+    <button class="nav-item" data-view="profile"><span class="ico">👤</span><span>Profile</span></button>
+    <button class="nav-item" data-view="about"><span class="ico">🧠</span><span>How this works</span></button>
+
+    <div class="level-box">
+      <div class="level-ring"><span id="level-num">1</span></div>
+      <div class="level-track"><div class="level-fill" id="level-fill"></div></div>
+      <small id="level-xp">0 / 400 xp</small>
+    </div>
+    <div class="side-note">
+      🚫 <b>No payment code.</b><br>
+      Gems are free and cannot be bought, sold, traded or withdrawn. Items are simulated values on real names.
+    </div>
+  </aside>
+
+  <!-- -------------------------------------------------------------- views -->
+  <main class="views">
+
+    <!-- ============================ HOME ============================ -->
+    <section class="view active" id="view-home">
+      <div class="hero">
+        <div>
+          <h2>CS:GO &amp; CS2 <span class="accent">Case Opening</span></h2>
+          <p>Nine originals, a live lobby of bots, and a gem balance you can never buy. This is a simulator of the real genre — odds printed, edges disclosed, wallet untouched.</p>
+          <div class="hero-actions">
+            <button class="btn btn-primary big" data-goto="cases">Open a case</button>
+            <button class="btn btn-ghost big" data-goto="crash">Play Crash</button>
+          </div>
+        </div>
+        <div class="hero-card">
+          <div class="hero-card-row"><span>Real money accepted</span><b class="bad">none</b></div>
+          <div class="hero-card-row"><span>Payment code in this build</span><b class="bad">none</b></div>
+          <div class="hero-card-row"><span>Opponents that are bots</span><b id="hero-bots">30 / 30</b></div>
+          <div class="hero-card-row"><span>Bots carrying a BOT badge</span><b class="good">all of them</b></div>
+        </div>
+      </div>
+
+      <h3 class="section-title">Clash Originals <span class="muted">· play any of our originals</span></h3>
+      <div class="game-grid" id="game-grid"></div>
+
+      <div class="race-banner panel" id="race-banner">
+        <div class="race-banner-text">
+          <h3>10K Daily Race <i class="new-tag">NEW</i></h3>
+          <p>Win up to <b>5,000 Gems</b> — climb the race by wagering gems. Everyone on the ladder except you is a bot, and the gems are free.</p>
+        </div>
+        <div class="race-banner-timer">
+          <span class="muted">ends in</span>
+          <b id="race-countdown">--:--:--</b>
+        </div>
+        <button class="btn btn-primary" data-goto="race">Check it out</button>
+      </div>
+
+      <div class="two-col">
+        <div class="panel case-creation">
+          <header class="panel-head"><h3>Case Creation</h3><span class="chip chip-warn">disabled on purpose</span></header>
+          <p class="muted">The real version of this card is a checkout: you pick items, odds and a payment method. There is no payment method here — this build has zero payment code, so the card is a mock-up.</p>
+          <div class="mock-pay">
+            <button class="btn" disabled>Card</button>
+            <button class="btn" disabled>Crypto</button>
+            <button class="btn" disabled>Skin transfer</button>
+          </div>
+          <small class="muted">Clicking those does nothing forever. That is the whole point of the project.</small>
+        </div>
+
+        <div class="panel">
+          <header class="panel-head"><h3>High Rollers</h3><span class="muted">biggest bets right now</span></header>
+          <ul class="feed-list" id="high-rollers"></ul>
+        </div>
+      </div>
+
+      <div class="panel">
+        <header class="panel-head"><h3>Lucky Wins</h3><span class="muted">live · bots only except where marked</span></header>
+        <table class="lucky-table">
+          <thead><tr><th>Game</th><th>User</th><th>Amount</th><th>Multi</th><th>Payout</th></tr></thead>
+          <tbody id="lucky-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================ CASES ============================ -->
+    <section class="view" id="view-cases">
+      <div class="view-head">
+        <div>
+          <h2>Case Opening</h2>
+          <p>Real CS2 case names, real item names and art, the published rarity odds, and simulated gem values. Every case card prints its own drop table — no site in this genre does that, which is why this one does.</p>
+        </div>
+        <div class="head-badges">
+          <span class="chip">Rare Special 0.26%</span>
+          <span class="chip chip-warn">returns ≈90% per case</span>
+          <span class="chip" id="voucher-chip">🎁 3 free cases</span>
+        </div>
+      </div>
+      <div class="case-grid" id="case-grid"></div>
+    </section>
+
+    <!-- ============================ BATTLES ============================ -->
+    <section class="view" id="view-battles">
+      <div class="view-head">
+        <div>
+          <h2>Case Battles</h2>
+          <p>You vs one bot, same case, same number of openings. Highest total value takes both piles. Ties go to you — the only courtesy in this building.</p>
+        </div>
+        <div class="head-badges"><span class="chip chip-warn">no extra rake beyond the case</span></div>
+      </div>
+
+      <div class="panel battle-setup">
+        <div class="field"><label>Case</label><select id="battle-case"></select></div>
+        <div class="field">
+          <label>Cases each</label>
+          <div class="segbtns" id="battle-count">
+            <button data-count="1" class="active">1</button><button data-count="2">2</button>
+            <button data-count="3">3</button><button data-count="4">4</button><button data-count="5">5</button>
+          </div>
+        </div>
+        <div class="field"><label>Entry</label><div class="total-cost">💎 <b id="battle-cost">0</b></div></div>
+        <div class="field grow"><button class="btn btn-primary big" id="battle-start">Create battle</button></div>
+      </div>
+
+      <div class="panel battle-stage">
+        <div class="battle-side">
+          <div class="battle-name" id="battle-you-name">You</div>
+          <div class="reel"><div class="reel-track" id="reel-you"></div></div>
+          <div class="battle-total" id="battle-you-total">💎 0</div>
+        </div>
+        <div class="battle-vs" id="battle-verdict">VS</div>
+        <div class="battle-side">
+          <div class="battle-name" id="battle-bot-name">—</div>
+          <div class="reel"><div class="reel-track" id="reel-bot"></div></div>
+          <div class="battle-total" id="battle-bot-total">💎 0</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <header class="panel-head"><h3>Live battles</h3><span class="muted">bots only · results from the feed</span></header>
+        <div class="battle-list" id="battle-list"></div>
+      </div>
+    </section>
+
+    <!-- ============================ CRASH ============================ -->
+    <section class="view" id="view-crash">
+      <div class="view-head">
+        <div>
+          <h2>Crash</h2>
+          <p>The multiplier climbs from 1.00x and dies at a hidden point. 1% of rounds bust instantly at 1.00x, and about half of all rounds end before 2.00x.</p>
+        </div>
+        <div class="head-badges"><span class="chip chip-warn">1% instant bust · 1% edge</span></div>
+      </div>
+
+      <div class="crash-grid">
+        <div class="panel crash-stage">
+          <div class="crash-history" id="crash-history"></div>
+          <div class="canvas-wrap"><canvas id="crash-canvas"></canvas><div class="crash-bust" id="crash-bust"></div></div>
+          <div class="crash-readout">
+            <div class="crash-mult" id="crash-mult">1.00x</div>
+            <div class="crash-status" id="crash-status">Betting open</div>
+          </div>
+          <div class="progress"><div class="progress-fill" id="crash-progress"></div></div>
+        </div>
+        <div class="panel">
+          <header class="panel-head"><h3>This round</h3><span class="muted" id="crash-bet-summary">0 bets</span></header>
+          <ul class="bet-list" id="crash-bets"></ul>
+        </div>
+      </div>
+
+      <div class="panel bet-bar">
+        <div class="field">
+          <label for="crash-amount">Bet amount</label>
+          <div class="input-row"><span class="gem">💎</span><input id="crash-amount" type="number" min="25" step="25" value="500"></div>
+          <div class="quick-row">
+            <button data-crash-amt="25">25</button><button data-crash-amt="100">100</button>
+            <button data-crash-amt="500">500</button><button data-crash-amt="half">½</button>
+            <button data-crash-amt="double">2×</button><button data-crash-amt="max">max</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="crash-auto">Auto cash out</label>
+          <div class="input-row"><span>✂️</span><input id="crash-auto" type="number" min="1.01" step="0.1" value="2.00"></div>
+          <small class="muted">Handled by the server, so it still fires if you switch tabs.</small>
+        </div>
+        <div class="field grow">
+          <div class="potential"><span>Potential payout</span><b id="crash-potential">💎 1,000</b></div>
+          <button class="btn btn-primary big" id="crash-action">Place bet</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ DOUBLE ============================ -->
+    <section class="view" id="view-double">
+      <div class="view-head">
+        <div>
+          <h2>Double</h2>
+          <p>A 54-segment wheel: 24 green and 24 red pay 2x, 6 gold pay 8x. Bet a colour, watch it spin, blame the wheel.</p>
+        </div>
+        <div class="head-badges"><span class="chip chip-warn">≈11% edge on every colour</span></div>
+      </div>
+
+      <div class="double-grid">
+        <div class="panel double-stage">
+          <div class="wheel-wrap"><canvas id="double-canvas"></canvas><div class="wheel-pointer">▼</div></div>
+          <div class="double-result" id="double-result">Place a bet before the wheel stops taking entries.</div>
+          <div class="progress"><div class="progress-fill" id="double-progress"></div></div>
+          <div class="double-history" id="double-history"></div>
+        </div>
+        <div class="panel double-side">
+          <div class="field">
+            <label>Colour</label>
+            <div class="segbtns color-btns" id="double-color">
+              <button data-color="green" class="active">Green <b>2×</b></button>
+              <button data-color="red">Red <b>2×</b></button>
+              <button data-color="gold">Gold <b>8×</b></button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="double-amount">Bet amount</label>
+            <div class="input-row"><span class="gem">💎</span><input id="double-amount" type="number" min="25" step="25" value="500"></div>
+            <div class="quick-row">
+              <button data-double-amt="25">25</button><button data-double-amt="100">100</button>
+              <button data-double-amt="500">500</button><button data-double-amt="half">½</button>
+              <button data-double-amt="double">2×</button><button data-double-amt="max">max</button>
+            </div>
+          </div>
+          <button class="btn btn-primary big" id="double-bet">Bet on Green</button>
+          <div class="muted tiny" id="double-timer">—</div>
+          <header class="panel-head" style="margin-top:.6rem"><h3>Players this spin</h3><span class="muted" id="double-total">0</span></header>
+          <ul class="bet-list" id="double-bets"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ UPGRADER ============================ -->
+    <section class="view" id="view-upgrader">
+      <div class="view-head">
+        <div>
+          <h2>Upgrader</h2>
+          <p>Stake gems or a skin, pick a multiplier, spin the arc. A 4x target lands about 24% of the time — the maths is on the dial, not hidden behind it.</p>
+        </div>
+        <div class="head-badges"><span class="chip chip-warn">4% edge</span></div>
+      </div>
+
+      <div class="up-grid">
+        <div class="panel up-stage">
+          <div class="up-arc-wrap">
+            <canvas id="up-canvas"></canvas>
+            <div class="up-center">
+              <div class="up-chance" id="up-chance">--%</div>
+              <div class="up-sub" id="up-sub">chance to win</div>
+            </div>
+          </div>
+          <div class="up-result" id="up-result">Pick a target multiplier.</div>
+        </div>
+
+        <div class="panel up-side">
+          <div class="segbtns" id="up-mode">
+            <button data-mode="gems" class="active">Gems</button>
+            <button data-mode="skin">Skin</button>
+          </div>
+          <div class="field" id="up-gems-field">
+            <label for="up-amount">Stake</label>
+            <div class="input-row"><span class="gem">💎</span><input id="up-amount" type="number" min="25" step="25" value="1000"></div>
+          </div>
+          <div class="field" id="up-skin-field" hidden>
+            <label>Stake a skin</label>
+            <div class="select-wrap"><select id="up-skin"></select></div>
+          </div>
+          <div class="field">
+            <label for="up-target">Target multiplier</label>
+            <div class="input-row"><span>🎯</span><input id="up-target" type="number" min="1.05" max="100" step="0.05" value="4.00"></div>
+            <div class="quick-row" id="up-quick">
+              <button data-up="1.5">1.5×</button><button data-up="2">2×</button>
+              <button data-up="4">4×</button><button data-up="10">10×</button>
+              <button data-up="25">25×</button><button data-up="100">100×</button>
+            </div>
+          </div>
+          <div class="up-math" id="up-math">stake × target = payout · win chance 24.00%</div>
+          <button class="btn btn-primary big" id="up-spin">Upgrade</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ MINES ============================ -->
+    <section class="view" id="view-mines">
+      <div class="view-head">
+        <div>
+          <h2>Mines</h2>
+          <p>Reveal gems, dodge the mines, cash out whenever. The board is generated before your first click, so clicking faster changes nothing.</p>
+        </div>
+        <div class="head-badges"><span class="chip chip-warn">3% rake</span><span class="chip" id="mines-odds">1–5 mines</span></div>
+      </div>
+
+      <div class="mines-grid-wrap">
+        <div class="panel mines-board-panel"><div class="mines-board" id="mines-board"></div></div>
+        <div class="panel mines-controls">
+          <div class="field">
+            <label for="mines-bet">Bet amount</label>
+            <div class="input-row"><span class="gem">💎</span><input id="mines-bet" type="number" min="25" step="25" value="500"></div>
+          </div>
+          <div class="field">
+            <label>Mines</label>
+            <div class="segbtns" id="mines-count">
+              <button data-mines="1">1</button><button data-mines="2">2</button><button data-mines="3" class="active">3</button>
+              <button data-mines="4">4</button><button data-mines="5">5</button>
+            </div>
+          </div>
+          <div class="mines-stats">
+            <div><span>Gems found</span><b id="mines-found">0</b></div>
+            <div><span>Multiplier</span><b id="mines-mult">1.00x</b></div>
+            <div><span>Next tile</span><b id="mines-next">1.29x</b></div>
+          </div>
+          <button class="btn btn-primary big" id="mines-start">Start round</button>
+          <button class="btn btn-ghost wide" id="mines-cashout" disabled>Cash out 💎 <span id="mines-payout">0</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ PLINKO ============================ -->
+    <section class="view" id="view-plinko">
+      <div class="view-head">
+        <div>
+          <h2>Plinko</h2>
+          <p>Drop a ball, it bounces left or right on fair coin flips and lands in a slot. Multiplier tables are printed under the board, all of them return 99%.</p>
+        </div>
+        <div class="head-badges"><span class="chip">≈99% return</span></div>
+      </div>
+
+      <div class="plinko-wrap">
+        <div class="panel plinko-stage">
+          <canvas id="plinko-canvas"></canvas>
+        </div>
+        <div class="panel plinko-side">
+          <div class="field">
+            <label>Risk</label>
+            <div class="segbtns" id="plinko-risk">
+              <button data-risk="low">Low</button><button data-risk="medium" class="active">Medium</button><button data-risk="high">High</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Rows</label>
+            <div class="segbtns" id="plinko-rows">
+              <button data-rows="8">8</button><button data-rows="12" class="active">12</button><button data-rows="16">16</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="plinko-amount">Bet amount</label>
+            <div class="input-row"><span class="gem">💎</span><input id="plinko-amount" type="number" min="25" step="25" value="500"></div>
+            <div class="quick-row">
+              <button data-plinko-amt="25">25</button><button data-plinko-amt="100">100</button>
+              <button data-plinko-amt="500">500</button><button data-plinko-amt="half">½</button>
+              <button data-plinko-amt="double">2×</button><button data-plinko-amt="max">max</button>
+            </div>
+          </div>
+          <button class="btn btn-primary big" id="plinko-drop">Drop ball</button>
+          <div class="plinko-table" id="plinko-table"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ TILES ============================ -->
+    <section class="view" id="view-tiles">
+      <div class="view-head">
+        <div>
+          <h2>Tiles</h2>
+          <p>Five rows, five tiles each, and more cursed tiles the higher you climb. Pick one tile per row and cash out whenever you like.</p>
+        </div>
+        <div class="head-badges"><span class="chip chip-warn">≈4% rake</span><span class="chip" id="tiles-odds">row 1 · 1 cursed of 5</span></div>
+      </div>
+
+      <div class="tiles-wrap">
+        <div class="panel tiles-board-panel"><div class="tiles-board" id="tiles-board"></div></div>
+        <div class="panel tiles-side">
+          <div class="field">
+            <label for="tiles-bet">Bet amount</label>
+            <div class="input-row"><span class="gem">💎</span><input id="tiles-bet" type="number" min="25" step="25" value="500"></div>
+          </div>
+          <div class="tiles-ladder" id="tiles-ladder"></div>
+          <button class="btn btn-primary big" id="tiles-start">Start run</button>
+          <button class="btn btn-ghost wide" id="tiles-cashout" disabled>Cash out 💎 <span id="tiles-payout">0</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ CHAMPION ============================ -->
+    <section class="view" id="view-champion">
+      <div class="view-head">
+        <div>
+          <h2>Champion</h2>
+          <p>Everyone piles gems into one pot and one contributor takes 95% of it. Your chance is your stake divided by the pot — no tickets, no secrets.</p>
+        </div>
+        <div class="head-badges"><span class="chip chip-warn">5% rake on the pot</span></div>
+      </div>
+
+      <div class="champ-grid">
+        <div class="panel champ-pot">
+          <div class="pot-label">Pot</div>
+          <div class="pot-value" id="champ-pot">💎 0</div>
+          <div class="pot-timer">Draw in <b id="champ-timer">--</b></div>
+          <div class="progress"><div class="progress-fill" id="champ-progress"></div></div>
+          <div class="champ-winner" id="champ-winner"></div>
+          <div class="champ-join">
+            <div class="input-row"><span class="gem">💎</span><input id="champ-amount" type="number" min="100" step="100" value="2000"></div>
+            <button class="btn btn-primary" id="champ-join">Join the pot</button>
+          </div>
+          <div class="muted tiny" id="champ-chance">your odds: —</div>
+        </div>
+        <div class="panel">
+          <header class="panel-head"><h3>Contributors</h3><span class="muted" id="champ-entries">0 entries</span></header>
+          <ul class="bet-list" id="champ-list"></ul>
+        </div>
+      </div>
+      <div class="panel">
+        <header class="panel-head"><h3>Recent pots</h3></header>
+        <div class="champ-history" id="champ-history"></div>
+      </div>
+    </section>
+
+    <!-- ============================ INVENTORY ============================ -->
+    <section class="view" id="view-inventory">
+      <div class="view-head">
+        <div>
+          <h2>Inventory</h2>
+          <p>Everything you've unboxed. Sell items back for gems — there is no marketplace, no trade, no withdrawal, and no real value of any kind.</p>
+        </div>
+        <div class="head-badges">
+          <span class="chip"><span id="inv-count">0</span> items</span>
+          <span class="chip">worth 💎 <span id="inv-total">0</span></span>
+        </div>
+      </div>
+      <div class="inv-actions">
+        <div class="segbtns" id="inv-filter">
+          <button data-filter="all" class="active">All</button>
+          <button data-filter="rarespecial">★ Rare</button>
+          <button data-filter="covert">Covert</button>
+          <button data-filter="stattrak">StatTrak™</button>
+        </div>
+        <button class="btn btn-ghost" id="inv-sell-cheap">Sell everything under 💎 500</button>
+        <button class="btn btn-ghost" id="inv-sell-all">Sell everything</button>
+      </div>
+      <div class="inv-grid" id="inv-grid"></div>
+      <div class="empty-note" id="inv-empty">Nothing here yet. Try the free case vouchers before you spend a gem.</div>
+    </section>
+
+    <!-- ============================ REWARDS ============================ -->
+    <section class="view" id="view-rewards">
+      <div class="view-head">
+        <div>
+          <h2>Rewards</h2>
+          <p>Everything on this page is free, permanently. The real site puts a purchase button next to this kind of panel — there is no purchase code in this build to put there.</p>
+        </div>
+      </div>
+      <div class="reward-grid">
+        <div class="panel reward-card">
+          <h3>💎 Free gems</h3>
+          <p class="muted">A drop of 2,500–9,000 gems every 3 minutes. Forever. No card, no limits to buy through.</p>
+          <button class="btn btn-primary" id="reward-gems">Claim gems</button>
+          <div class="muted tiny" id="reward-gems-timer">ready now</div>
+        </div>
+        <div class="panel reward-card">
+          <h3>🎁 Free cases</h3>
+          <p class="muted">Three free case vouchers every 45 minutes, usable on any case up to 💎 <span id="reward-max-price">1,000</span>.</p>
+          <button class="btn btn-primary" id="reward-cases">Claim 3 cases</button>
+          <div class="muted tiny" id="reward-cases-timer">ready now · you hold <b>3</b> vouchers</div>
+        </div>
+        <div class="panel reward-card">
+          <h3>🏁 Daily race</h3>
+          <p class="muted">Wager gems to climb a 12-hour ladder. Top ten get paid at rollover — bots win too, and they don't care.</p>
+          <button class="btn btn-ghost" data-goto="race">See the race</button>
+          <div class="muted tiny" id="reward-race-line">—</div>
+        </div>
+        <div class="panel reward-card wide">
+          <h3>🧠 Level rewards</h3>
+          <p class="muted">Every gem you wager earns XP. Level-ups pay a gem bonus — currently <b id="reward-level-bonus">—</b> at your next level.</p>
+          <div class="level-track big"><div class="level-fill" id="reward-level-fill"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ RACE ============================ -->
+    <section class="view" id="view-race">
+      <div class="view-head">
+        <div>
+          <h2>10K Daily Race</h2>
+          <p>Wager gems to climb. Rollover every 12 hours, prizes paid to the top ten. Every other name on this ladder is a bot, and their wagering is scripted.</p>
+        </div>
+        <div class="head-badges">
+          <span class="chip">ends in <b id="race-timer">--:--:--</b></span>
+          <span class="chip" id="race-rank-chip">your rank: —</span>
+        </div>
+      </div>
+      <div class="panel">
+        <table class="lb-table">
+          <thead><tr><th>#</th><th>Player</th><th>Wagered</th><th>Prize</th></tr></thead>
+          <tbody id="race-body"></tbody>
+        </table>
+      </div>
+      <div class="panel"><p class="muted">Prizes: 5,000 · 3,000 · 2,000 · 1,500 · 1,200 · 1,000 · 800 · 700 · 600 · 500 gems. Paid in fake gems, which is the only kind of gem here.</p></div>
+    </section>
+
+    <!-- ============================ PROFILE ============================ -->
+    <section class="view" id="view-profile">
+      <div class="view-head">
+        <div>
+          <h2>Profile</h2>
+          <p>Your simulated account: level, net worth, and how badly the last session went.</p>
+        </div>
+      </div>
+      <div class="profile-grid">
+        <div class="panel profile-card">
+          <div class="profile-head">
+            <span class="avatar big" id="profile-avatar"></span>
+            <div>
+              <b id="profile-name">guest</b>
+              <div class="muted tiny">level <span id="profile-level">1</span> · <span id="profile-xp">0 xp</span></div>
+            </div>
+          </div>
+          <div class="stat-grid" id="profile-stats"></div>
+        </div>
+        <div class="panel">
+          <header class="panel-head"><h3>Leaderboard</h3><span class="muted">net worth · bots included</span></header>
+          <table class="lb-table">
+            <thead><tr><th>#</th><th>Player</th><th>Level</th><th>Net worth</th><th>Today</th></tr></thead>
+            <tbody id="lb-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel danger-zone">
+        <div>
+          <h3>Danger zone</h3>
+          <p class="muted">Reset the profile back to 2,500 gems and an empty inventory. It changes nothing real, because nothing here is real.</p>
+        </div>
+        <button class="btn btn-danger" id="reset-btn">Reset profile</button>
+      </div>
+    </section>
+
+    <!-- ============================ ABOUT ============================ -->
+    <section class="view" id="view-about">
+      <div class="view-head">
+        <div>
+          <h2>How this works</h2>
+          <p>A simulation of a CS2 skin site, built so you can see the machinery instead of guessing at it.</p>
+        </div>
+      </div>
+      <div class="about-grid">
+        <div class="panel about-card">
+          <h3>💸 There is no real money here</h3>
+          <ul>
+            <li>No deposits, no withdrawals, no payments, no crypto, no card forms, no accounts. There is no code for any of it.</li>
+            <li>Gems are free forever: 2,500 to start, 2,500–9,000 every 3 minutes, three free case vouchers every 45 minutes, level-ups pay bonuses.</li>
+            <li>Items carry <em>simulated</em> gem values on real CS2 item names. Nothing can be traded, transferred or withdrawn.</li>
+            <li>The "Case Creation" card and the payment-method buttons are deliberately dead ends — that is where the real thing takes your money.</li>
+          </ul>
+        </div>
+        <div class="panel about-card">
+          <h3>🤖 The other players are bots</h3>
+          <ul>
+            <li><span id="about-bots">30</span> scripted bots with levels, balances, betting styles and chat lines. They bet, open cases, battle, complain and rebuy instantly when they bust.</li>
+            <li>They carry a <b>BOT</b> badge in chat, in bet lists, in the battle feed and on the leaderboard. Manufactured activity is the oldest trick in this genre; here it is labelled.</li>
+            <li>Your chat gets canned replies after a random delay. They do not understand you and they never will.</li>
+          </ul>
+        </div>
+        <div class="panel about-card">
+          <h3>📉 The maths, printed</h3>
+          <ul>
+            <li>Cases use the published CS2 rarity odds: Mil-Spec 79.92%, Restricted 15.98%, Classified 3.2%, Covert 0.64%, Rare Special 0.26%.</li>
+            <li>Every case prices its contents to return about 90%, which is why the median pull is a fraction of the entry.</li>
+            <li>Crash has 1% instant-bust rounds and ~50% of rounds die before 2.00x. Double is ≈11% a spin. Mines rakes 3%, Tiles ≈4%, Upgrader 4%, Champion 5%, Plinko 1%.</li>
+            <li>Small edges plus thousands of spins equals a hole. That is not bad luck, it is arithmetic.</li>
+          </ul>
+        </div>
+        <div class="panel about-card">
+          <h3>🔬 Check the odds yourself</h3>
+          <p class="muted">Ask the server to roll a case a few thousand times and report what actually came back. Nothing is hidden behind a promise — the sim will happily hand you the receipts.</p>
+          <div class="verify-row">
+            <select id="verify-case"></select>
+            <input id="verify-n" type="number" value="5000" min="100" max="20000" step="100">
+            <button class="btn btn-primary" id="verify-btn">Run</button>
+          </div>
+          <div class="verify-out" id="verify-out">No run yet.</div>
+        </div>
+        <div class="panel about-card wide">
+          <h3>🆘 If this stops being a game</h3>
+          <p>Real versions of this exist, they are engineered by excellent designers to keep you clicking, and even a free simulator can hook the same reflexes. If gambling is affecting your money, sleep, relationships or mood, that is a real problem with real help available — talk to someone you trust or a local gambling support service. This page will never ask you for a cent, and you should be suspicious of anything that does.</p>
+          <p class="muted">Built as a simulation, not a product: no analytics, no ads, no accounts, no third-party scripts. Skin artwork is loaded from Steam's public CDN and belongs to Valve; item names and case contents come from the public CS2 item data.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- -------------------------------------------------------------- rail -->
+  <aside class="rail">
+    <div class="panel rail-panel">
+      <header class="panel-head"><h3>Lucky Wins</h3><span class="pulse-dot"></span></header>
+      <ul class="feed-list" id="feed-list"></ul>
+    </div>
+    <div class="panel rail-panel chat-panel">
+      <header class="panel-head"><h3>Chat</h3><span class="muted" id="chat-count">—</span></header>
+      <ul class="chat-list" id="chat-list"></ul>
+      <form class="chat-form" id="chat-form">
+        <input id="chat-input" maxlength="130" placeholder="say something…" autocomplete="off">
+        <button type="submit" class="btn btn-primary">Send</button>
+      </form>
+    </div>
+  </aside>
+</div>
+
+<footer class="footer">
+  <span><b>clash.sim</b> is a fake-currency simulation for entertainment and education. No payments, no withdrawals, no real-world value. Not affiliated with clash.gg or Valve.</span>
+  <span class="footer-right">All opponents are bots · item art © Valve, loaded from Steam's public CDN · if you want to gamble for real, talk to a professional first, not a website.</span>
+</footer>
+
+<!-- case modal -->
+<div class="modal-root" id="modal-root" hidden>
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal" id="modal-card">
+    <header class="modal-head"><h3 id="modal-title">Case</h3><button class="btn btn-ghost icon" data-close="1">✕</button></header>
+    <div class="modal-body" id="modal-body"></div>
+    <footer class="modal-foot" id="modal-foot"></footer>
+  </div>
+</div>
+
+<!-- name modal -->
+<div class="modal-root" id="name-root" hidden>
+  <div class="modal-backdrop"></div>
+  <div class="modal slim">
+    <header class="modal-head"><h3>Pick a display name</h3></header>
+    <div class="modal-body">
+      <p class="muted">Shown in chat, on the ladder and in battle feeds. Nothing is verified and nothing is stored anywhere but this machine.</p>
+      <div class="input-row big"><span>😎</span><input id="name-input" maxlength="14" placeholder="e.g. SoldAt1Point2" value=""></div>
+    </div>
+    <footer class="modal-foot"><button class="btn btn-primary big" id="name-save">Start with 💎 2,500 free gems</button></footer>
+  </div>
+</div>
+
+<div class="toast-root" id="toast-root"></div>
+
+<script src="core.js"></script>
+<script src="cases.js"></script>
+<script src="games.js"></script>
+</body>
+</html>

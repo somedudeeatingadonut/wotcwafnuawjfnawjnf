@@ -1,0 +1,406 @@
+/* ==========================================================================
+   cases.js — Case Opening (with the fixed reel) + Case Battles
+   The old reel guessed item widths from CSS numbers and drifted further off
+   with every item. This one measures the DOM after layout, so the marker
+   always stops on the item that was actually pulled.
+   ========================================================================== */
+
+/* ------------------------------------------------------------ case grid */
+
+function oddsBars(caseDef) {
+  const wrap = el('div', 'odds-bars');
+  caseDef.odds.slice().sort((a, b) => b.chance - a.chance).forEach((o) => {
+    const i = el('i');
+    i.style.width = Math.max(1, o.chance * 100) + '%';
+    i.style.background = o.color;
+    i.title = `${o.name}: ${(o.chance * 100).toFixed(o.chance < 0.01 ? 3 : 2)}%`;
+    wrap.appendChild(i);
+  });
+  return wrap;
+}
+
+function oddsRows(caseDef) {
+  const wrap = el('div', 'odds-rows');
+  caseDef.odds.forEach((o) => {
+    const pct = o.chance * 100;
+    wrap.appendChild(el('div', 'odds-row', `
+      <span class="dot" style="background:${o.color}"></span>
+      <span class="name">${esc(o.name)}${o.count != null ? ` · ${o.count} item${o.count === 1 ? '' : 's'}` : ''}</span>
+      <span>${pct < 0.01 ? pct.toFixed(3) : pct.toFixed(2)}%</span>
+      <span>💎 ${short(o.min)}–${short(o.max)}</span>`));
+  });
+  return wrap;
+}
+
+function buildCaseGrid() {
+  const grid = $('#case-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  state.cfg.cases.forEach((c) => {
+    const card = el('div', 'case-card');
+    const art = el('div', 'case-art');
+    if (c.image) {
+      const img = el('img');
+      img.src = c.image;
+      img.alt = c.name;
+      img.loading = 'lazy';
+      img.referrerPolicy = 'no-referrer';
+      img.onerror = () => { img.remove(); art.innerHTML = '<span class="fallback">📦</span>'; };
+      art.appendChild(img);
+    } else art.innerHTML = '<span class="fallback">📦</span>';
+
+    card.appendChild(art);
+    card.appendChild(el('div', 'case-tag', `${c.origin === 'original' ? 'clash original' : 'valve case'} · ${c.itemCount} items`));
+    const nameRow = el('div', 'case-name');
+    nameRow.appendChild(el('h3', '', esc(c.name)));
+    nameRow.appendChild(el('span', 'case-price', `💎 ${fmt(c.gems)}`));
+    card.appendChild(nameRow);
+    card.appendChild(oddsBars(c));
+    card.appendChild(oddsRows(c));
+    card.appendChild(el('div', 'odds-note', `Average return ≈${Math.round(c.returnRate * 100)}% · expected value 💎 ${fmt(c.ev)}`));
+
+    const actions = el('div', 'case-actions');
+    const openBtn = el('button', 'btn btn-primary', `Open 💎 ${short(c.gems)}`);
+    openBtn.addEventListener('click', () => openCaseFlow(c, 1));
+    const five = el('button', 'btn btn-ghost', 'Open ×5');
+    five.addEventListener('click', () => openCaseFlow(c, 5));
+    actions.appendChild(openBtn);
+    actions.appendChild(five);
+    card.appendChild(actions);
+    grid.appendChild(card);
+  });
+}
+
+/* ------------------------------------------------------- the case modal */
+
+async function openCaseFlow(caseDef, count) {
+  const you = state.you;
+  const voucherOk = you.freeCases >= count && caseDef.gems <= state.cfg.freebies.freeCaseMaxPrice;
+  const cost = caseDef.gems * count;
+
+  let detail = null;
+  try { detail = await api(`case?id=${encodeURIComponent(caseDef.id)}`); } catch { /* non-fatal */ }
+
+  const body = el('div');
+  const tabs = el('div', 'modal-tabs');
+  const tabContents = el('button', 'active', 'Contents & odds');
+  const tabReel = el('button', '', 'Reel');
+  tabs.appendChild(tabContents);
+  tabs.appendChild(tabReel);
+
+  const contentsPane = el('div');
+  const reelPane = el('div');
+  reelPane.hidden = true;
+
+  /* ---------------- contents pane ---------------- */
+  const oddsBox = el('div', 'panel');
+  oddsBox.appendChild(el('h3', '', 'Drop table — rolled exactly like this'));
+  oddsBox.appendChild(oddsRows(detail || caseDef));
+  oddsBox.appendChild(el('p', 'odds-note',
+    `Wear (Factory New → Battle-Scarred) is rolled per item and scales its value; StatTrak™ adds ×1.5 on ~10% of drops. ` +
+    `Average return ≈${Math.round((detail ? detail.returnRate : caseDef.returnRate) * 100)}%.`));
+  contentsPane.appendChild(oddsBox);
+
+  const grid = el('div', 'contents-grid');
+  (detail ? detail.contents : []).forEach((it) => grid.appendChild(itemEl({ ...it, value: it.base, wearShort: '' }, { small: true })));
+  contentsPane.appendChild(grid);
+
+  /* ---------------- reel pane ---------------- */
+  const win = el('div', 'roll-window');
+  const track = el('div', 'roll-track');
+  const fade = el('div', 'roll-fade');
+  const pointer = el('div', 'roll-pointer');
+  win.appendChild(track);
+  win.appendChild(fade);
+  win.appendChild(pointer);
+
+  const banner = el('div', 'result-banner', 'Pick open — the reel spins after the server already decided the drops.');
+  const results = el('div', 'pull-result');
+  reelPane.appendChild(banner);
+  reelPane.appendChild(win);
+  reelPane.appendChild(results);
+
+  tabContents.addEventListener('click', () => {
+    tabContents.classList.add('active'); tabReel.classList.remove('active');
+    contentsPane.hidden = false; reelPane.hidden = true;
+  });
+  tabReel.addEventListener('click', () => {
+    tabReel.classList.add('active'); tabContents.classList.remove('active');
+    reelPane.hidden = false; contentsPane.hidden = true;
+    if (payload) spinReel();
+  });
+
+  body.appendChild(tabs);
+  body.appendChild(contentsPane);
+  body.appendChild(reelPane);
+
+  /* ---------------- footer ---------------- */
+  const footer = [];
+  const openBtn = el('button', 'btn btn-primary', `Open ${count}× for 💎 ${fmt(cost)}`);
+  openBtn.addEventListener('click', () => open(false));
+  footer.push(openBtn);
+
+  if (voucherOk) {
+    const vBtn = el('button', 'btn btn-gem', `Use ${count} free voucher${count > 1 ? 's' : ''}`);
+    vBtn.addEventListener('click', () => open(true));
+    footer.push(vBtn);
+  } else if (you.freeCases > 0) {
+    footer.push(el('span', 'chip', `🎁 vouchers only cover cases up to 💎 ${fmt(state.cfg.freebies.freeCaseMaxPrice)}`));
+  }
+  modal.open(`${caseDef.name} — 💎 ${fmt(caseDef.gems)} each`, body, footer);
+
+  /* ============ reel: fillers, winners, measured scroll ============ */
+
+  const FILL = 24;      // filler items before the winners
+  const TAIL = 10;      // filler items after, so an end-winner can still centre
+  let payload = null;
+  let spinning = false;
+
+  function filler(n, from) {
+    const src = (detail && detail.contents.length) ? detail.contents : [{}];
+    for (let i = 0; i < n; i++) {
+      const base = src[Math.floor(Math.random() * src.length)];
+      track.appendChild(itemEl({
+        rarity: base.rarity || 'rarity_rare',
+        name: base.name || '———',
+        weapon: base.weapon || '',
+        seed: (base.seed || 0) + i * 13,
+        value: 0, wearShort: '', uid: 'f' + (from + i),
+      }, { small: true }));
+    }
+  }
+
+  function buildTrack(items) {
+    track.innerHTML = '';
+    track.style.transition = 'none';
+    track.style.transform = 'translateX(0px)';
+    filler(FILL, 0);
+    items.forEach((it, i) => track.appendChild(itemEl(it, { small: true, uid: 'w' + i })));
+    filler(TAIL, FILL);
+  }
+
+  function spinReel() {
+    if (spinning) return;
+    const items = Array.from(track.children);
+    if (!items.length) return;
+    // the winner group sits just before the tail; centre the middle of it
+    const firstWin = FILL;
+    const lastWin = FILL + payload.items.length - 1;
+    const target = items[Math.floor((firstWin + lastWin) / 2)];
+    if (!target) return;
+
+    spinning = true;
+    audio.gear();
+
+    // measured position, not a guess based on CSS assumptions
+    const winRect = win.getBoundingClientRect();
+    const itemRect = target.getBoundingClientRect();
+    if (!winRect.width || !itemRect.width) { spinning = false; reveal(); return; }
+    const jitter = (Math.random() - 0.5) * itemRect.width * 0.4;
+    const delta = (winRect.left + winRect.width / 2) - (itemRect.left + itemRect.width / 2) + jitter;
+
+    requestAnimationFrame(() => {
+      track.style.transition = 'transform 3.4s cubic-bezier(.1,.72,.06,1)';
+      track.style.transform = `translateX(${delta}px)`;
+    });
+
+    // short reel clicks, hard-capped so the audio never piles up
+    let ticks = 0;
+    const ticker = setInterval(() => {
+      ticks++;
+      if (ticks > 18) return clearInterval(ticker);
+      audio.tone(480 + ((ticks * 37) % 300), 16, 'square', 0.008);
+    }, 150);
+
+    setTimeout(() => { clearInterval(ticker); spinning = false; reveal(); }, 3480);
+  }
+
+  function reveal() {
+    if (!payload) return;
+    const { cost: spent, refund, items } = payload;
+    const net = refund - spent;
+    banner.className = 'result-banner ' + (spent === 0 || net >= 0 ? 'good' : 'bad');
+    banner.innerHTML = spent === 0
+      ? `Free case — pulled 💎 ${fmt(refund)} of items, nothing spent.`
+      : net >= 0
+        ? `Pulled 💎 ${fmt(refund)} for 💎 ${fmt(spent)} → <b>+💎 ${fmt(net)}</b>`
+        : `Pulled 💎 ${fmt(refund)} for 💎 ${fmt(spent)} → <b>−💎 ${fmt(Math.abs(net))}</b>`;
+    results.innerHTML = '';
+    items.forEach((it, i) => {
+      const card = itemEl(it, { pop: true });
+      card.style.animationDelay = i * 90 + 'ms';
+      results.appendChild(card);
+    });
+    if (net > 0) { audio.win(); toast(`Pull profit +💎 ${fmt(net)} — check your inventory.`, 'gold'); }
+    else if (spent > 0) audio.lose();
+    if (you.freeCases !== state.you.freeCases && $('#voucher-chip')) {
+      $('#voucher-chip').textContent = `🎁 ${state.you.freeCases} free case${state.you.freeCases === 1 ? '' : 's'}`;
+    }
+  }
+
+  async function open(asVoucher) {
+    if (spinning) return;
+    openBtn.disabled = true;
+    try {
+      payload = await api('case/open', { caseId: caseDef.id, count, voucher: !!asVoucher });
+    } catch (err) {
+      toast(err.message, 'err');
+      openBtn.disabled = false;
+      return;
+    }
+    buildTrack(payload.items);
+    // the equipment is what lands in the inventory — the request already did that
+    applyYou(payload.you, { flash: true });
+    banner.className = 'result-banner';
+    banner.textContent = 'Rolling…';
+    results.innerHTML = '';
+    openBtn.disabled = false;
+    openBtn.textContent = `Open ${count}× again — 💎 ${fmt(caseDef.gems * count)}`;
+
+    if (reelPane.hidden) tabReel.click(); else spinReel();
+  }
+}
+
+/* ==========================================================================
+   Battles — one roll-off against one random bot
+   ========================================================================== */
+
+const battleCfg = { caseId: null, count: 1, busy: false };
+
+const battleCase = () => state.cfg.cases.find((x) => x.id === battleCfg.caseId);
+const battleCost = () => { const c = battleCase(); return c ? c.gems * battleCfg.count : 0; };
+
+function initBattles() {
+  const sel = $('#battle-case');
+  if (!sel) return;
+  sel.innerHTML = '';
+  state.cfg.cases.forEach((c) => sel.appendChild(new Option(`${c.name} — 💎 ${fmt(c.gems)} each`, c.id)));
+  battleCfg.caseId = (state.cfg.cases[2] || state.cfg.cases[0]).id;
+  sel.value = battleCfg.caseId;
+  sel.addEventListener('change', () => {
+    battleCfg.caseId = sel.value;
+    $('#battle-cost').textContent = fmt(battleCost());
+  });
+  $$('#battle-count button').forEach((b) => b.addEventListener('click', () => {
+    $$('#battle-count button').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    battleCfg.count = Number(b.dataset.count);
+    $('#battle-cost').textContent = fmt(battleCost());
+  }));
+  $('#battle-cost').textContent = fmt(battleCost());
+  $('#battle-you-name').textContent = state.you ? state.you.name : 'You';
+  $('#battle-start').addEventListener('click', runBattle);
+}
+
+async function runBattle() {
+  if (battleCfg.busy) return;
+  battleCfg.busy = true;
+  const btn = $('#battle-start');
+  btn.disabled = true;
+  const sides = $$('.battle-side');
+  sides.forEach((s) => s.classList.remove('winner'));
+  const youTotal = $('#battle-you-total');
+  const botTotal = $('#battle-bot-total');
+  youTotal.textContent = '💎 0';
+  botTotal.textContent = '💎 0';
+  youTotal.classList.remove('win');
+  botTotal.classList.remove('win');
+  const verdict = $('#battle-verdict');
+  verdict.className = 'battle-vs';
+  verdict.textContent = 'VS';
+
+  let payload;
+  try {
+    payload = await api('battle/start', { caseId: battleCfg.caseId, count: battleCfg.count });
+  } catch (err) {
+    toast(err.message, 'err');
+    battleCfg.busy = false;
+    btn.disabled = false;
+    return;
+  }
+  applyYou(payload.you, { flash: true });
+  $('#battle-you-name').textContent = payload.yourPile.name;
+  $('#battle-bot-name').innerHTML = `${esc(payload.oppPile.name)}`;
+  audio.gear();
+
+  await Promise.all([
+    spinVertical($('#reel-you'), payload.yourPile.items, 2200),
+    spinVertical($('#reel-bot'), payload.oppPile.items, 3000),
+  ]);
+
+  youTotal.textContent = '💎 ' + fmt(payload.yourPile.total);
+  botTotal.textContent = '💎 ' + fmt(payload.oppPile.total);
+  const net = payload.pot - payload.cost;
+  if (payload.win) {
+    verdict.className = 'battle-vs win';
+    verdict.textContent = net >= 0 ? `YOU WIN  +💎 ${fmt(net)}` : `YOU WIN  −💎 ${fmt(Math.abs(net))}`;
+    youTotal.classList.add('win');
+    sides[0].classList.add('winner');
+    audio.big();
+    toast(net >= 0
+      ? `Battle won: +💎 ${fmt(net)} — both piles are yours.`
+      : `You won the roll-off, but both piles only add up to 💎 ${fmt(payload.pot)} against a 💎 ${fmt(payload.cost)} entry. Winning the coinflip is not beating the house.`);
+  } else {
+    verdict.className = 'battle-vs lose';
+    verdict.textContent = `BOT WINS  −💎 ${fmt(payload.cost)}`;
+    botTotal.classList.add('win');
+    sides[1].classList.add('winner');
+    audio.lose();
+    toast(`Lost the battle: −💎 ${fmt(payload.cost)}.`);
+  }
+  battleCfg.busy = false;
+  btn.disabled = false;
+}
+
+/** Vertical reel that scrolls to an item, measured from the DOM (no CSS guessing). */
+function spinVertical(track, items, duration) {
+  return new Promise((resolve) => {
+    const lead = 8;
+    const tail = 12;
+    const blank = (n, pre) => {
+      for (let i = 0; i < n; i++) {
+        track.appendChild(itemEl({ rarity: 'rarity_rare', name: '———', weapon: '', value: 0, seed: i * 5, wearShort: '', uid: pre + i }, { small: true }));
+      }
+    };
+    track.innerHTML = '';
+    track.style.transition = 'none';
+    track.style.transform = 'translateY(0px)';
+    blank(lead, 'l');
+    items.forEach((it, i) => track.appendChild(itemEl(it, { small: true, uid: 'r' + i })));
+    blank(tail, 't');
+
+    requestAnimationFrame(() => {
+      const children = Array.from(track.children);
+      const target = children[Math.floor((lead + lead + items.length - 1) / 2)];
+      const reel = track.parentElement;
+      if (!target || !reel) return resolve();
+      const reelRect = reel.getBoundingClientRect();
+      const itemRect = target.getBoundingClientRect();
+      if (!itemRect.height) return resolve();
+      const delta = (reelRect.top + reelRect.height / 2) - (itemRect.top + itemRect.height / 2);
+      track.style.transition = `transform ${duration}ms cubic-bezier(.1,.75,.08,1)`;
+      track.style.transform = `translateY(${delta}px)`;
+      setTimeout(resolve, duration + 60);
+    });
+  });
+}
+
+/** Bot vs bot battles from the feed, so the Battles page is never empty. */
+function renderBattleLog() {
+  const box = $('#battle-list');
+  if (!box) return;
+  state.lastFeed.filter((f) => f.type === 'Battles' && f.battle).slice(0, 6).forEach((f) => {
+    const b = f.battle;
+    const row = el('div', 'battle-row');
+    row.innerHTML = `
+      <span class="bt-case">${esc(b.caseName)} ×${b.count}</span>
+      <span class="muted tiny">${esc(b.a.name)} vs ${esc(b.b.name)}</span>
+      <span class="bt-total"><b class="${b.a.total >= b.b.total ? 'win' : ''}">💎 ${short(b.a.total)}</b> vs <b class="${b.b.total > b.a.total ? 'win' : ''}">💎 ${short(b.b.total)}</b></span>`;
+    box.prepend(row);
+    while (box.children.length > 8) box.removeChild(box.lastChild);
+  });
+}
+
+window.initCases = buildCaseGrid;
+window.initBattles = initBattles;
+window.onFeed = renderBattleLog;
