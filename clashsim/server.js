@@ -20,6 +20,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const catalog = require('./lib/catalog');
+const creator = require('./lib/creator');
 const W = require('./lib/world');
 const { ACTIONS, PLINKO, MIN_BET } = require('./lib/games');
 
@@ -186,6 +187,24 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  if (route === 'items' && req.method === 'GET') {
+    // the Case Creator's item picker ("Select up to 20 items")
+    const q = url.searchParams.get('q') || '';
+    const rarity = clean(url.searchParams.get('rarity'), 24) || 'all';
+    const limit = Number(url.searchParams.get('limit')) || 40;
+    return sendJson(res, 200, {
+      items: creator.searchItems(q, rarity, limit),
+      universe: creator.universeSize(),
+      rarities: catalog.rarities,
+    });
+  }
+
+  if (route === 'honor-roll' && req.method === 'GET') {
+    return sendJson(res, 200, { cases: creator.all().slice(-40).reverse().map((c) => ({
+      id: c.id, name: c.name, by: c.ownerName, gems: c.gems, opens: c.opens, earned: c.earned, image: c.image, items: c.items.length,
+    })) });
+  }
+
   if (route === 'hello' && req.method === 'POST') {
     const body = await readBody(req);
     const id = clean(body.pid, 40) || pid || require('node:crypto').randomBytes(8).toString('hex');
@@ -205,6 +224,19 @@ const server = http.createServer(async (req, res) => {
   /* ---- needs a session ---- */
   const player = W.getPlayer(pid);
   if (!player) return sendJson(res, 400, { error: 'Unknown session — reload the page.' });
+
+  if (route === 'creator' && req.method === 'GET') {
+    return sendJson(res, 200, {
+      rules: {
+        minLevel: creator.MIN_LEVEL, maxCases: creator.MAX_CASES_PER_PLAYER, commission: creator.COMMISSION,
+        maxItems: creator.MAX_ITEMS, minItems: creator.MIN_ITEMS, nameMin: creator.NAME_MIN, nameMax: creator.NAME_MAX,
+      },
+      mine: creator.mine(player.id),
+      art: creator.artChoices(60),
+      rarities: catalog.rarities,
+      universe: creator.universeSize(),
+    });
+  }
 
   if (route === 'state' && req.method === 'GET') {
     return sendJson(res, 200, W.stateSnapshot(player, url.searchParams.get('sinceChat'), url.searchParams.get('sinceFeed')));
@@ -235,6 +267,8 @@ const server = http.createServer(async (req, res) => {
 
 async function main() {
   await W.loadPlayers();
+  creator.setUniverse(catalog.itemUniverse());   // the Case Creator's shop of parts
+  creator.setEconomy(catalog.wearTable, catalog.stattrak);
   W.boot();
 
   W.systemChat('Welcome to clash.sim — a fake-currency emulator. Every gem is free, every opponent is a bot, and there is no way to spend real money here.');
@@ -242,7 +276,7 @@ async function main() {
 
   server.listen(PORT, HOST, () => {
     console.log(`[clashsim] fake-currency CS2 site sim on http://${HOST}:${PORT}`);
-    console.log(`[clashsim] ${catalog.cases.length} cases, ${catalog.cases.reduce((s, c) => s + c.items.length, 0)} items, ${W.world.bots.length} bots`);
+    console.log(`[clashsim] ${catalog.cases.length} cases, ${catalog.cases.reduce((s, c) => s + c.items.length, 0)} items, ${creator.universeSize()} creator parts, ${W.world.bots.length} bots`);
     console.log('[clashsim] real money: DISABLED (no deposits, no withdrawals, no payments)');
   });
 }

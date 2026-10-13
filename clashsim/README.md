@@ -90,7 +90,7 @@ price   = round(EV ÷ 0.9 ÷ 5) × 5               (so the case returns ~90%)
   rarity the UI prints *is* the tier they roll from, so the printed table and the
   rolled table can never disagree.
 
-`npm run smoke` re-derives all of that from the shipped catalog and fails if the
+`npm run smoke` (97 checks) re-derives all of that from the shipped catalog and fails if the
 odds stop summing to 1, if a case drifts away from ~90%, if a Valve case loses the
 published ladder, or if 40,000 sampled rolls per case land outside sampling noise
 (showing that even a 40k sample of the cheapest case is noisy: their tails are thin).
@@ -107,12 +107,17 @@ clashsim/
   public/index.html      the whole UI: nav, 15 views, modals, toasts
   public/styles.css      dark/violet theme, responsive, reduced-motion aware
   public/core.js         session, polling with chat/feed deltas, sound, router, inventory
-  public/cases.js        case grid + the measured reel + battles
+  public/cases.js        case grid + filters + the measured reel + battles + the Case Creator
   public/core.js         session, sound, feeds · the reel-speed profiles
+  public/catalog-clash.json  the clash pack — 48 of the site's own/classic cases, generated
+  public/art/case-<n>.webp   152 real clash case images, served locally
+  lib/creator.js         the Case Creator: rules, pricing, commissions, the published store
   public/games.js        crash · double · upgrader · mines · plinko · tiles · champion
   public/catalog.json    generated — 12 cases, 314 items (never hand-edit)
-  tools/build-catalog.js generator + pricing model
-  tools/smoke.js         the test suite
+  tools/build-catalog.js generator + pricing model (the clash.sim originals)
+  tools/build-clash-catalog.js  generator for the clash pack (the site's own cases + classics)
+  tools/smoke.js         the test suite, 97 checks
+  tools/reel-check.js    the real-browser reel test
   reference/             the clash.gg page the layout was matched against
   .data/players.json     gitignored save file
 ```
@@ -150,6 +155,46 @@ off this one polling call, with deltas so the feed and chat never repeat), and
    Steam CDN was unreachable. Every case and item now has a generated SVG
    fallback (`caseFallbackArt()`) that is drawn from the item's own name and
    rarity colour, so the grid is never empty.
+
+## The clash pack
+
+`public/catalog-clash.json` holds the cases the real site runs, and they are
+named after the real thing: the case slugs come out of the clash.gg bundle's own
+curated lists (`highest_roi`, `best_knives`, `best_awp`, `most_expensive`,
+`free_cases`, `best_weapon`, `best_gloves`, `best_stickers`).
+
+| group | count | what it is |
+| --- | --- | --- |
+| clash classics | 8 | real Valve cases (Operation Bravo, Huntsman, Breakout, Shadow, Spectrum, Clutch, Danger Zone, Snakebite) with their real contents |
+| clash originals | 40 | the site's own cases — `10% Knife`, `30% Knife`, `Knife 50 50`, `Knives Out`, `Color Hunt`, `Purple Pack`, `Vortex`, `Brokie 50 50`, `Medium 50 50`, `60% Profit`, `AWP Main`, `10% AWP Asiimov`, `AWP Heaven`, `Tomb Raid`, `Wealth`, `Eye of the Dragon`, `Eclipse`, `Killer Loadout`, `Stay Frosty`, `Howl Abuser`, `Glove Flip`, `Finest Gloves`, `5% Gloves`, `Rains and Pours`, `Sticker Package`, `Holo King`, `Hologram`, `Nametag Case`, `Level 5/10/20/200 Case` … |
+| clash.sim originals | 2 | the two themed cases this build always had (knife + glove) |
+| valve | 10 | the original shelf |
+| community | 0+ | whatever players publish in the Case Creator |
+
+Two rules make those names honest. A case called **10% Knife** really does drop a
+★ in 10% of opens (30% Knife 30%, Knife 50 50 half, 5% Gloves 5%) — the smoke
+suite asserts each one. And every case, pack or community, is still priced as
+`price = EV / 0.9`, so the return rate printed on its card is the rate it pays.
+
+The case art is real: 152 `cases_*.webp` images out of the dump, copied to
+`public/art/` and assigned to the site's own cases, so the shelf shows clash's
+own case art even with no network at all. Item art still hot-links Steam's CDN
+and falls back to generated art when it cannot load.
+
+## The Case Creator
+
+The real site's creator, rebuilt: **Create Your Own Case** → name → image → up to
+20 items → drop chances → **Finish Case Creation**, which prints Case Price and
+"You earn {amount} per unbox". The copy and the rules are the ones in the bundle
+(name must be unused and at least 10 characters, no profanities, a cap on how
+many cases one account publishes, commission per open).
+
+What the sim adds, because it can: **the price is a choice of three honest
+price points** — Player-favoured (≈97 % back), The house row (≈90 %), or
+Creator-favoured (≈82 %) — each labeled with the rate it actually pays, and the
+commission printed before you publish. Publishing merges the case into the shelf
+for every session; the creator earns 5 % of every open, paid out of the entry
+fee, and only the owner can delete it.
 
 ## Reel speed
 

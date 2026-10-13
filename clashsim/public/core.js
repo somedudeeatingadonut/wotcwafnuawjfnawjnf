@@ -378,7 +378,8 @@ document.addEventListener('pointerdown', () => audio.unlock(), { once: true });
 /* ------------------------------------------------------------- home view */
 
 const GAMES = [
-  { id: 'cases', ico: '📦', name: 'Case Opening', desc: 'Real CS2 cases, published odds, ×1 to ×5 openings.', meta: '0.26% rare special' },
+  { id: 'cases', ico: '📦', name: 'Case Opening', desc: 'Clash classics, the site\'s own cases, real CS2 cases — published odds on every card.', meta: '60 cases' },
+  { id: 'creator', ico: '🛠️', name: 'Case Creator', desc: 'Build a case from up to 20 items, price it, earn on every open.', meta: '5% commission' },
   { id: 'battles', ico: '⚔️', name: 'Battles', desc: 'Same case, same openings, highest total takes both piles.', meta: '1 v 1 bot' },
   { id: 'crash', ico: '📈', name: 'Crash', desc: 'Climb the multiplier and cash out before it busts.', meta: '1% instant bust' },
   { id: 'double', ico: '🎡', name: 'Double', desc: '54 segments: 24 green, 24 red, 6 gold.', meta: '2× / 2× / 8×' },

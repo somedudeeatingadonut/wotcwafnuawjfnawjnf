@@ -193,7 +193,7 @@ function newPlayer(id, name) {
     lastFreeCaseAt: 0,
     freeCases: 3,
     raceWagered: 0,
-    stats: { wagered: 0, won: 0, lost: 0, opened: 0, biggestWin: 0, rounds: 0, battles: 0, upgrades: 0 },
+    stats: { wagered: 0, won: 0, lost: 0, opened: 0, biggestWin: 0, rounds: 0, battles: 0, upgrades: 0, creatorEarned: 0, creatorOpens: 0 },
     netToday: 0,
     crashBet: null,
     mines: null,

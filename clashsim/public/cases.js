@@ -161,11 +161,46 @@ function caseFallbackArt() {
   </svg>`;
 }
 
+/* Which slice of the shelf is showing. Filters are built from the catalog the
+ * server actually ships, so a new origin ("clash-original", "community")
+ * appears here on its own. */
+const CASE_FILTERS = [
+  { key: 'all', label: 'All cases' },
+  { key: 'original', label: 'clash.sim originals' },
+  { key: 'clash-classic', label: 'Clash classics' },
+  { key: 'clash-original', label: 'Clash originals' },
+  { key: 'community', label: 'Community' },
+];
+let caseFilter = 'all';
+
+function initCaseFilters() {
+  const bar = $('#case-filters');
+  if (!bar) return;
+  const counts = {};
+  state.cfg.cases.forEach((c) => { counts[c.origin] = (counts[c.origin] || 0) + 1; });
+  counts.all = state.cfg.cases.length;
+  bar.innerHTML = '';
+  CASE_FILTERS.forEach((f) => {
+    const n = counts[f.key] || 0;
+    const b = el('button', 'case-filter' + (caseFilter === f.key ? ' active' : ''), `${esc(f.label)} <b>${n}</b>`);
+    b.disabled = n === 0;
+    b.addEventListener('click', () => { caseFilter = f.key; buildCaseGrid(); initCaseFilters(); });
+    bar.appendChild(b);
+  });
+}
+
 function buildCaseGrid() {
   const grid = $('#case-grid');
   if (!grid) return;
   grid.innerHTML = '';
-  state.cfg.cases.forEach((c) => {
+  const list = state.cfg.cases
+    .filter((c) => caseFilter === 'all' || c.origin === caseFilter)
+    .slice()
+    .sort((a, b) => a.gems - b.gems);
+  const empty = $('#case-empty');
+  if (empty) empty.hidden = list.length > 0;
+
+  list.forEach((c) => {
     const card = el('div', 'case-card');
     const art = el('div', 'case-art');
     if (c.image) {
@@ -179,14 +214,23 @@ function buildCaseGrid() {
     } else art.innerHTML = caseFallbackArt();
 
     card.appendChild(art);
-    card.appendChild(el('div', 'case-tag', `${c.origin === 'original' ? 'clash original' : 'valve case'} · ${c.itemCount} items`));
+
+    const label = c.origin === 'original' ? 'clash.sim original'
+      : c.origin === 'clash-classic' ? 'clash classic'
+      : c.origin === 'clash-original' ? 'clash original'
+      : c.origin === 'community' ? `community · by ${esc(c.creator ? c.creator.name : 'someone')}`
+      : 'valve case';
+    card.appendChild(el('div', 'case-tag' + (c.origin === 'community' ? ' community' : ''), `${label} · ${c.itemCount} items`));
+
     const nameRow = el('div', 'case-name');
     nameRow.appendChild(el('h3', '', esc(c.name)));
     nameRow.appendChild(el('span', 'case-price', `💎 ${fmt(c.gems)}`));
     card.appendChild(nameRow);
     card.appendChild(oddsBars(c));
     card.appendChild(oddsRows(c));
-    card.appendChild(el('div', 'odds-note', `Average return ≈${Math.round(c.returnRate * 100)}% · expected value 💎 ${fmt(c.ev)}`));
+    card.appendChild(el('div', 'odds-note',
+      `Average return ≈${Math.round((c.returnRate || 0.9) * 100)}% · expected value 💎 ${fmt(c.ev)}` +
+      (c.creator ? ` · creator earns 💎 ${fmt(Math.round(c.gems * (c.creator.commission || 0.05)))} per open` : '')));
 
     const actions = el('div', 'case-actions');
     const openBtn = el('button', 'btn btn-primary', `Open 💎 ${short(c.gems)}`);
@@ -195,12 +239,38 @@ function buildCaseGrid() {
     five.addEventListener('click', () => openCaseFlow(c, 5));
     actions.appendChild(openBtn);
     actions.appendChild(five);
+    if (c.origin === 'community' && c.creator && state.you && c.creator.id === state.you.id) {
+      const del = el('button', 'btn btn-ghost', 'Delete');
+      del.addEventListener('click', async () => {
+        try {
+          await api('creator/delete', { id: c.id });
+          toast(`Deleted "${c.name}".`, 'gold');
+          await refreshCfg();
+        } catch (err) { toast(err.message, 'err'); }
+      });
+      actions.appendChild(del);
+    }
     card.appendChild(actions);
     grid.appendChild(card);
   });
 }
 
-/* ------------------------------------------------------- the case modal */
+/** Re-pull the catalog after a case is published or deleted. */
+async function refreshCfg() {
+  try {
+    const cfg = await fetch('api/config').then((r) => r.json());
+    state.cfg = cfg;
+    buildCaseGrid();
+    initCaseFilters();
+    const sel = $('#battle-case');
+    if (sel) {
+      const keep = sel.value;
+      sel.innerHTML = '';
+      state.cfg.cases.forEach((c) => sel.appendChild(new Option(`${c.name} (💎 ${fmt(c.gems)})`, c.id)));
+      if (keep) sel.value = keep;
+    }
+  } catch (err) { toast('Could not refresh the case list: ' + err.message, 'err'); }
+}
 
 async function openCaseFlow(caseDef, count) {
   const you = state.you;
@@ -225,9 +295,15 @@ async function openCaseFlow(caseDef, count) {
   const oddsBox = el('div', 'panel');
   oddsBox.appendChild(el('h3', '', 'Drop table — rolled exactly like this'));
   oddsBox.appendChild(oddsRows(detail || caseDef));
+  const rate = detail ? (detail.returnRate || caseDef.returnRate) : caseDef.returnRate;
   oddsBox.appendChild(el('p', 'odds-note',
     `Wear (Factory New → Battle-Scarred) is rolled per item and scales its value; StatTrak™ adds ×1.5 on ~10% of drops. ` +
-    `Average return ≈${Math.round((detail ? detail.returnRate : caseDef.returnRate) * 100)}%.`));
+    `Average return ≈${Math.round((rate || 0.9) * 100)}%.`));
+  if (caseDef.creator) {
+    oddsBox.appendChild(el('p', 'odds-note community-note',
+      `Community case by <b>${esc(caseDef.creator.name)}</b> — the creator earns 💎 ${fmt(Math.round(caseDef.gems * (caseDef.creator.commission || 0.05)))} ` +
+      `(${Math.round((caseDef.creator.commission || 0.05) * 100)}%) of every open. It rolls from the same server-side odds as everything else.`));
+  }
   contentsPane.appendChild(oddsBox);
 
   const grid = el('div', 'contents-grid');
@@ -561,6 +637,373 @@ function renderBattleLog() {
   });
 }
 
-window.initCases = buildCaseGrid;
+window.initCases = () => { buildCaseGrid(); initCaseFilters(); };
 window.initBattles = initBattles;
 window.onFeed = renderBattleLog;
+
+/* ==========================================================================
+   Case Creator — "Create Your Own Case"
+   Name · image · up to 20 items · drop chances · price. Publishing merges the
+   case into the shelf for everyone, with a 5% commission per open.
+   ========================================================================== */
+
+const creatorState = {
+  rules: null,
+  art: [],
+  mine: [],
+  honor: [],
+  selected: [],        // items as returned by /api/items (base values included)
+  weights: {},         // itemId → weight
+  shape: 'house',
+  image: null,
+  quotes: [],
+  q: '',
+  rarity: 'all',
+  loaded: false,
+};
+
+const creatorIds = () => creatorState.selected.map((i) => i.id);
+
+function creatorEven() {
+  creatorState.weights = {};
+  creatorState.selected.forEach((i) => { creatorState.weights[i.id] = 1; });
+}
+
+/** Proportional to rarity, the way every case on the shelf is built. */
+function creatorLadder() {
+  const byRarity = { rarespecial: 1, rarity_ancient: 6, rarity_legendary: 18, rarity_mythical: 90, rarity_rare: 420, rarity_common: 900, rarity_uncommon: 900 };
+  creatorState.weights = {};
+  creatorState.selected.forEach((i) => { creatorState.weights[i.id] = byRarity[i.rarity] || 60; });
+}
+
+function creatorRarityName(r) {
+  const def = state.cfg.rarities[r];
+  return def ? def.name : r;
+}
+
+/* --------------------------------------------------------------- rendering */
+
+function renderCreatorArt() {
+  const box = $('#creator-art');
+  if (!box) return;
+  box.innerHTML = '';
+  creatorState.art.forEach((src) => {
+    const b = el('button', 'art-choice' + (creatorState.image === src ? ' active' : ''));
+    const img = el('img');
+    img.src = src;
+    img.alt = 'case art';
+    img.loading = 'lazy';
+    b.appendChild(img);
+    b.addEventListener('click', () => {
+      creatorState.image = creatorState.image === src ? null : src;
+      renderCreatorArt();
+    });
+    box.appendChild(b);
+  });
+  if (!creatorState.art.length) box.appendChild(el('p', 'muted', 'No case art found in public/art/.'));
+}
+
+function renderCreatorResults() {
+  const box = $('#creator-results');
+  if (!box) return;
+  box.innerHTML = '';
+  const chosen = new Set(creatorIds());
+  const list = creatorState.results || [];
+  if (!list.length) { box.appendChild(el('p', 'muted', 'No items match that search.')); return; }
+  list.forEach((it) => {
+    const card = el('button', 'creator-item' + (chosen.has(it.id) ? ' chosen' : ''));
+    const swatch = el('span', 'creator-item-rarity');
+    swatch.style.background = (state.cfg.rarities[it.rarity] || {}).color || '#888';
+    card.appendChild(swatch);
+    card.appendChild(el('b', '', esc(it.name)));
+    card.appendChild(el('i', '', `💎 ${short(it.base)}`));
+    card.addEventListener('click', () => {
+      if (chosen.has(it.id)) {
+        creatorState.selected = creatorState.selected.filter((x) => x.id !== it.id);
+        delete creatorState.weights[it.id];
+      } else if (creatorState.selected.length >= (creatorState.rules?.maxItems || 20)) {
+        creatorToast(`Up to ${creatorState.rules?.maxItems || 20} items.`, 'err');
+      } else {
+        creatorState.selected.push(it);
+        creatorState.weights[it.id] = creatorState.weights[it.id] || 1;
+      }
+      renderCreatorResults();
+      renderCreatorChances();
+      renderCreatorQuote();
+    });
+    box.appendChild(card);
+  });
+}
+
+function renderCreatorChances() {
+  const box = $('#creator-chances');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!creatorState.selected.length) {
+    box.appendChild(el('p', 'muted', 'Pick items above — their drop chances appear here.'));
+    return;
+  }
+  const total = creatorState.selected.reduce((s, i) => s + (creatorState.weights[i.id] || 0), 0) || 1;
+  creatorState.selected
+    .slice()
+    .sort((a, b) => b.base - a.base)
+    .forEach((it) => {
+      const row = el('div', 'chance-row');
+      const swatch = el('span', 'creator-item-rarity');
+      swatch.style.background = (state.cfg.rarities[it.rarity] || {}).color || '#888';
+      row.appendChild(swatch);
+      row.appendChild(el('b', '', esc(it.name)));
+      row.appendChild(el('i', '', fmt(creatorRarityName(it.rarity))));
+      const pct = ((creatorState.weights[it.id] || 0) / total) * 100;
+      row.appendChild(el('span', 'chance-pct', `${pct < 1 ? pct.toFixed(2) : pct.toFixed(1)}%`));
+      const input = el('input', 'chance-input');
+      input.type = 'number';
+      input.min = '0';
+      input.step = '1';
+      input.value = String(creatorState.weights[it.id] || 1);
+      input.addEventListener('input', () => {
+        creatorState.weights[it.id] = Math.max(0, Number(input.value) || 0);
+        renderCreatorChances();
+        renderCreatorQuote();
+      });
+      row.appendChild(input);
+      const del = el('button', 'btn btn-ghost tiny', '✕');
+      del.addEventListener('click', () => {
+        creatorState.selected = creatorState.selected.filter((x) => x.id !== it.id);
+        renderCreatorResults();
+        renderCreatorChances();
+        renderCreatorQuote();
+      });
+      row.appendChild(del);
+      box.appendChild(row);
+    });
+  box.appendChild(el('div', 'chance-sum', `Chances are normalised to 100% when you publish (weights ${fmt(total)}).`));
+}
+
+/** Live EV preview: same maths the server uses, printed honestly. */
+function creatorEv(items, chances) {
+  const wear = state.cfg.wears || [];
+  const st = state.cfg.stattrak || { chance: 0.1, mult: 1.5 };
+  const wearEv = wear.reduce((s, w) => s + w.chance * (w.mult ?? 1), 0) || 1;
+  const stEv = 1 + st.chance * (st.mult - 1);
+  const ev = items.reduce((s, i, idx) => s + (chances[idx] / 100) * i.base, 0);
+  return ev * wearEv * stEv;
+}
+
+function renderCreatorQuote() {
+  const box = $('#creator-quote');
+  if (!box) return;
+  box.innerHTML = '';
+  const ids = creatorIds();
+  if (ids.length < (creatorState.rules?.minItems || 6)) {
+    box.appendChild(el('p', 'muted', `Add at least ${creatorState.rules?.minItems || 6} items to see the price.`));
+    if ($('#creator-earn')) $('#creator-earn').textContent = '0';
+    return;
+  }
+  const total = creatorState.selected.reduce((s, i) => s + (creatorState.weights[i.id] || 0), 0) || 1;
+  const chances = creatorState.selected.map((i) => ((creatorState.weights[i.id] || 0) / total) * 100);
+  const ev = creatorEv(creatorState.selected, chances);
+  const rates = { player: 0.97, house: 0.90, creator: 0.82 };
+  creatorState.quotes = Object.entries(rates).map(([key, rate]) => {
+    const raw = ev / rate;
+    const gems = Math.max(10, raw < 500 ? Math.round(raw) : Math.round(raw / 5) * 5);   // same rounding as the server
+    return { key, gems, rate, returnRate: ev / gems };
+  });
+  creatorState.quotes.forEach((q) => {
+    const b = el('button', 'quote-card' + (creatorState.shape === q.key ? ' active' : ''));
+    b.appendChild(el('b', '', q.key === 'player' ? 'Player-favoured' : q.key === 'house' ? 'The house row' : 'Creator-favoured'));
+    b.appendChild(el('span', 'quote-price', `💎 ${fmt(q.gems)}`));
+    b.appendChild(el('i', '', `${Math.round(q.returnRate * 100)}% back · you earn 💎 ${fmt(Math.round(q.gems * (creatorState.rules?.commission || 0.05)))}`));
+    b.addEventListener('click', () => {
+      creatorState.shape = q.key;
+      renderCreatorQuote();
+    });
+    box.appendChild(b);
+  });
+  const picked = creatorState.quotes.find((q) => q.key === creatorState.shape) || creatorState.quotes[1];
+  if ($('#creator-earn')) $('#creator-earn').textContent = fmt(Math.round(picked.gems * (creatorState.rules?.commission || 0.05)));
+}
+
+function renderCreatorMine() {
+  const box = $('#creator-mine');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!creatorState.mine.length) {
+    box.appendChild(el('p', 'muted', 'You have not created any cases yet!'));
+    return;
+  }
+  creatorState.mine.forEach((c) => {
+    const row = el('div', 'mine-row');
+    if (c.image) {
+      const img = el('img');
+      img.src = c.image; img.alt = c.name; img.loading = 'lazy';
+      row.appendChild(img);
+    }
+    const info = el('div', 'mine-info');
+    info.appendChild(el('b', '', esc(c.name)));
+    info.appendChild(el('i', '', `💎 ${fmt(c.gems)} · ${c.items} items · opened ${fmt(c.opens)}× · earned 💎 ${fmt(c.earned)}`));
+    row.appendChild(info);
+    const del = el('button', 'btn btn-ghost tiny', 'Delete');
+    del.addEventListener('click', async () => {
+      try {
+        await api('creator/delete', { id: c.id });
+        creatorToast(`Deleted "${c.name}".`, 'gold');
+        await refreshCfg();
+        await loadCreator(true);
+      } catch (err) { creatorToast(err.message, 'err'); }
+    });
+    row.appendChild(del);
+    box.appendChild(row);
+  });
+}
+
+function renderCreatorHonor() {
+  const box = $('#creator-honor');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!creatorState.honor.length) {
+    box.appendChild(el('p', 'muted', 'Nobody has published a case yet — be the first.'));
+    return;
+  }
+  creatorState.honor.slice(0, 8).forEach((c) => {
+    const row = el('div', 'mine-row');
+    if (c.image) {
+      const img = el('img');
+      img.src = c.image; img.alt = c.name; img.loading = 'lazy';
+      row.appendChild(img);
+    }
+    const info = el('div', 'mine-info');
+    info.appendChild(el('b', '', esc(c.name)));
+    info.appendChild(el('i', '', `by ${esc(c.by)} · 💎 ${fmt(c.gems)} · ${fmt(c.opens)} opens · creator made 💎 ${fmt(c.earned)}`));
+    row.appendChild(info);
+    box.appendChild(row);
+  });
+}
+
+function creatorToast(msg, kind) {
+  const box = $('#creator-error');
+  if (!box) { toast(msg, kind); return; }
+  box.hidden = false;
+  box.textContent = msg;
+  box.className = 'creator-note ' + (kind === 'err' ? 'bad' : 'good');
+  clearTimeout(creatorToast.timer);
+  creatorToast.timer = setTimeout(() => { box.hidden = true; }, 6000);
+}
+
+/* ------------------------------------------------------------- data loading */
+
+async function searchCreatorItems() {
+  const q = encodeURIComponent(creatorState.q);
+  const rarity = encodeURIComponent(creatorState.rarity);
+  try {
+    const res = await fetch(`api/items?q=${q}&rarity=${rarity}&limit=48`).then((r) => r.json());
+    creatorState.results = res.items || [];
+  } catch { creatorState.results = []; }
+  renderCreatorResults();
+}
+
+async function loadCreator(force) {
+  if (creatorState.loaded && !force) { renderCreatorMine(); renderCreatorHonor(); return; }
+  const box = $('#creator-results');
+  try {
+    const st = await fetch(`api/creator${state.pid ? `?pid=${encodeURIComponent(state.pid)}` : ''}`).then((r) => r.json());
+    creatorState.rules = st.rules;
+    creatorState.art = st.art || [];
+    creatorState.mine = st.mine || [];
+    creatorState.loaded = true;
+    const honor = await fetch('api/honor-roll').then((r) => r.json()).catch(() => ({ cases: [] }));
+    creatorState.honor = honor.cases || [];
+    if ($('#creator-universe')) $('#creator-universe').textContent = `${fmt(st.universe)} items to build from`;
+    if ($('#creator-commission-chip')) $('#creator-commission-chip').textContent = `${Math.round((st.rules?.commission || 0.05) * 100)}% commission per open`;
+  } catch (err) {
+    if (box) box.innerHTML = '';
+    creatorToast('Could not load the creator: ' + err.message, 'err');
+    return;
+  }
+  renderCreatorArt();
+  renderCreatorMine();
+  renderCreatorHonor();
+  await searchCreatorItems();
+  renderCreatorChances();
+  renderCreatorQuote();
+}
+
+function initCreator() {
+  const nameInput = $('#creator-name');
+  const qInput = $('#creator-q');
+  const raritySel = $('#creator-rarity');
+  if (!nameInput || !qInput || !raritySel) return;
+
+  // rarity filter options
+  if (!raritySel.options.length) {
+    const order = ['all', 'rarespecial', 'rarity_ancient', 'rarity_legendary', 'rarity_mythical', 'rarity_rare', 'rarity_uncommon', 'rarity_common'];
+    order.forEach((r) => {
+      const label = r === 'all' ? 'All rarities' : creatorRarityName(r);
+      raritySel.appendChild(new Option(label, r));
+    });
+  }
+
+  let t = null;
+  qInput.addEventListener('input', () => {
+    creatorState.q = qInput.value.trim();
+    clearTimeout(t);
+    t = setTimeout(searchCreatorItems, 180);
+  });
+  raritySel.addEventListener('change', () => { creatorState.rarity = raritySel.value; searchCreatorItems(); });
+  $('#creator-even').addEventListener('click', () => { creatorEven(); renderCreatorChances(); renderCreatorQuote(); });
+  $('#creator-ladder').addEventListener('click', () => { creatorLadder(); renderCreatorChances(); renderCreatorQuote(); });
+  $('#creator-clear').addEventListener('click', () => {
+    creatorState.selected = [];
+    creatorState.weights = {};
+    renderCreatorResults();
+    renderCreatorChances();
+    renderCreatorQuote();
+  });
+  $('#creator-publish').addEventListener('click', publishCreator);
+}
+
+async function publishCreator() {
+  const name = ($('#creator-name').value || '').trim();
+  if (creatorState.selected.length < (creatorState.rules?.minItems || 6)) {
+    creatorToast(`Pick at least ${creatorState.rules?.minItems || 6} items.`, 'err');
+    return;
+  }
+  const total = creatorState.selected.reduce((s, i) => s + (creatorState.weights[i.id] || 0), 0) || 1;
+  const chances = creatorState.selected.map((i) => (creatorState.weights[i.id] || 0) / total);
+  const btn = $('#creator-publish');
+  btn.disabled = true;
+  try {
+    const res = await api('creator/create', {
+      name, items: creatorIds(), chances, image: creatorState.image, shape: creatorState.shape,
+    });
+    const c = res.case;
+    creatorToast(`Published "${c.name}" — 💎 ${fmt(c.gems)} a case, you earn 💎 ${fmt(c.commission)} per open. It is on the shelf now.`, 'good');
+    creatorState.selected = [];
+    creatorState.weights = {};
+    creatorState.image = null;
+    $('#creator-name').value = '';
+    await refreshCfg();
+    creatorState.loaded = false;
+    await loadCreator(true);
+    renderCreatorArt();
+  } catch (err) {
+    creatorToast(err.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* The creator page wakes up when its nav entry is clicked, and the grid is
+ * rebuilt when the shelf is (a published case has to appear straight away).
+ * This listens on the nav itself so it keeps working whatever games.js does
+ * with window.onViewChange. */
+document.addEventListener('click', (e) => {
+  const nav = e.target.closest('.nav-item[data-view]');
+  if (!nav) return;
+  if (nav.dataset.view === 'creator') {
+    initCreator();
+    loadCreator(false).catch(() => {});
+  }
+  if (nav.dataset.view === 'cases') { buildCaseGrid(); initCaseFilters(); }
+});
+

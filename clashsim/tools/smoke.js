@@ -26,6 +26,12 @@ const os = require('node:os');
 const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
+
+/* The tests must not see cases a developer published while playing: point the
+ * creator store at a scratch dir *before* the catalog module loads. */
+const SMOKE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'clashsim-smoke-data-'));
+process.env.CLASH_DATA_DIR = SMOKE_DATA_DIR;
+
 const catalog = require(path.join(ROOT, 'lib', 'catalog'));
 const { PLINKO, DOUBLE_PAYOUT } = require(path.join(ROOT, 'lib', 'games'));
 
@@ -70,7 +76,7 @@ let dataDir = null;
 
 async function startServer() {
   if (externalUrl) return;
-  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clashsim-smoke-'));
+  dataDir = SMOKE_DATA_DIR;
   child = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
     cwd: ROOT,
     env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', CLASH_DATA_DIR: dataDir },
@@ -99,10 +105,18 @@ function stopServer() {
    ========================================================================== */
 
 async function testCatalog() {
-  await check('catalog: 12 cases, all with items', () => {
-    assert(catalog.cases.length === 12, `${catalog.cases.length} cases`);
-    for (const def of catalog.cases) assert(def.items.length >= 15, `${def.id} has ${def.items.length} items`);
-    return `${catalog.cases.length} cases · ${catalog.cases.reduce((s, c) => s + c.items.length, 0)} items`;
+  await check('catalog: 60 cases across four origins, all with items', () => {
+    assert(catalog.cases.length >= 60, `${catalog.cases.length} cases`);
+    const origins = {};
+    for (const def of catalog.cases) origins[def.origin] = (origins[def.origin] || 0) + 1;
+    assert(origins.valve >= 10 && origins.original >= 2, 'the original shelf shrank');
+    assert(origins['clash-classic'] >= 6, `${origins['clash-classic']} clash classics`);
+    assert(origins['clash-original'] >= 30, `${origins['clash-original']} clash originals`);
+    for (const def of catalog.cases) {
+      assert(def.items.length >= 6, `${def.id} has ${def.items.length} items`);
+      assert(def.gems >= 10, `${def.id} is priced at ${def.gems}`);
+    }
+    return `${catalog.cases.length} cases (${Object.entries(origins).map(([k, v]) => `${k} ${v}`).join(', ')}) · ${catalog.cases.reduce((s, c) => s + c.items.length, 0)} items`;
   });
 
   for (const def of catalog.cases) {
@@ -120,7 +134,9 @@ async function testCatalog() {
 
   await check('pricing: Valve cases keep the published rarity ladder', () => {
     const published = { rarity_rare: 0.7992, rarity_mythical: 0.1598, rarity_legendary: 0.032, rarity_ancient: 0.0064, rarespecial: 0.0026 };
-    for (const def of catalog.cases.filter((c) => c.origin !== 'original')) {
+    // the Valve ladder belongs to the real Valve cases; the site's own cases
+    // print their own tables (checked separately below)
+    for (const def of catalog.cases.filter((c) => c.origin === 'valve' || c.origin === 'clash-classic')) {
       const byTier = {};
       for (const it of def.items) byTier[it.rarity] = (byTier[it.rarity] || 0) + it.chance;
       for (const [rarity, expected] of Object.entries(published)) {
@@ -180,7 +196,7 @@ async function testHttp() {
     assert(cfg.status === 200 && cfg.json, 'no config');
     assert(cfg.json.realMoney === false, 'realMoney must be false');
     assert(cfg.json.botCount > 0 && cfg.json.botsTagged === true, 'bots must exist and be tagged');
-    assert(cfg.json.cases.length === 12, 'case list');
+    assert(cfg.json.cases.length >= 60, `case list is ${cfg.json.cases.length}`);
     assert(cfg.json.minBet === MIN_BET, 'minimum bet');
     return `${cfg.json.site} · ${cfg.json.botCount} bots · real money ${cfg.json.realMoney}`;
   });
@@ -504,11 +520,159 @@ async function testHttp() {
     const res = await api(`samples?id=${cheap.id}&n=3000`);
     assert(res.status === 200, `${res.status}`);
     const r = res.json;
+
+  await check('clash pack: every case prices to the return rate it prints', async () => {
+    const worst = { id: '', rate: 0 };
+    const bad = [];
+    for (const c of catalog.cases) {
+      const odds = c.items.reduce((s, i) => s + i.chance, 0);
+      if (Math.abs(odds - 1) > 1e-5) bad.push(`${c.id} odds ${odds.toFixed(5)}`);
+      const rate = catalog.caseEv(c) / c.gems;
+      if (rate > 1.02) bad.push(`${c.id} returns ${(rate * 100).toFixed(0)}%`);
+      if (rate > worst.rate) { worst.id = c.id; worst.rate = rate; }
+    }
+    assert(!bad.length, `${bad.length} case(s) mispriced: ${bad.slice(0, 4).join(', ')}`);
+    return `${catalog.cases.length} cases, odds sum to 1, worst return ${(worst.rate * 100).toFixed(1)}% (${worst.id})`;
+  });
+
+  await check('clash pack: the site\'s own cases carry the percentage they advertise', async () => {
+    const want = { 'clash-10percent-knife': 0.10, 'clash-30percent-knife': 0.30, 'clash-knife-50-50': 0.50, 'clash-5percent-gloves': 0.05, 'clash-glove-flip': 0.20 };
+    const notes = [];
+    for (const [id, pct] of Object.entries(want)) {
+      const def = catalog.getCase(id);
+      assert(def, `${id} is missing from the catalog`);
+      const stars = def.items.filter((i) => i.rarity === 'rarespecial').reduce((s, i) => s + i.chance, 0);
+      const isKnife = /knife/.test(id);
+      const pool = def.items.filter((i) => i.rarity === 'rarespecial');
+      const isPool = pool.every((i) => i.name.startsWith('★')) && pool.every((i) => (isKnife ? /Knife|Karambit|Bayonet|Daggers|Nomad|Skeleton|Stiletto|Talon|Ursus|Kukri|Paracord|Survival|Falchion|Bowie|Flip|Gut|Navaja|Huntsman|Butterfly|Classic/.test(i.name) : true));
+      assert(isPool, `${id}: the rare tier is not a ★ pool`);
+      assert(Math.abs(stars - pct) < 0.005, `${id}: rare tier is ${(stars * 100).toFixed(2)}%, advertised ${(pct * 100).toFixed(0)}%`);
+      notes.push(`${def.name} ${(stars * 100).toFixed(0)}%`);
+    }
+    return notes.join(' · ');
+  });
+
+  await check('clash pack: real case art ships locally and is what the pages point at', async () => {
+    const fsx = require('node:fs');
+    const pathx = require('node:path');
+    const artDir = pathx.join(ROOT, 'public', 'art');
+    const files = fsx.existsSync(artDir) ? fsx.readdirSync(artDir).filter((f) => /^case-\d+\.webp$/.test(f)) : [];
+    assert(files.length >= 100, `only ${files.length} case art files in public/art/`);
+    const site = catalog.cases.filter((c) => c.origin === 'clash-original' || c.origin === 'clash-classic');
+    const withArt = site.filter((c) => c.image && new RegExp('^art/case-\\d+\\.webp$').test(c.image));
+    assert(withArt.length === site.length, `${site.length - withArt.length} clash cases have no art`);
+    const bytes = files.reduce((s2, f) => s2 + fsx.statSync(pathx.join(artDir, f)).size, 0);
+    return `${files.length} real case images (${(bytes / 1048576).toFixed(1)} MB) served from public/art/`;
+  });
+
+  await check('clash pack: the classics are real Valve cases with real contents', async () => {
+    const classics = catalog.cases.filter((c) => c.origin === 'clash-classic');
+    assert(classics.length >= 6, `only ${classics.length} clash classics`);
+    const named = classics.map((c) => c.name);
+    assert(named.includes('Operation Bravo Case'), 'Bravo should be a classic');
+    const withStars = classics.filter((c) => c.items.some((i) => i.rarity === 'rarespecial')).length;
+    assert(withStars === classics.length, `${classics.length - withStars} classics have no rare tier`);
+    const sample = classics[0];
+    return `${classics.length} classics incl. ${sample.name} (${sample.items.length} items)`;
+  });
+
     const tiers = Object.values(r.tiers).reduce((s, v) => s + v, 0);
     assert(tiers === 3000, `tier counts sum to ${tiers}`);
     assert(r.spent === cheap.gems * 3000, 'spent must be openings × price');
     assert(r.returnPct > 50 && r.returnPct < 150, `return ${r.returnPct}% is not plausible`);
     return `3000 rolls → ${r.returnPct}% back (theory ${((r.returned / r.spent) * 100).toFixed(1)}%)`;
+  });
+
+  await check('creator: name rules, item rules and the level gate all hold', async () => {
+    const a = await api('hello', { name: 'MakerA' });
+    const pidA = a.json.pid;
+    const items = await api('items?q=&limit=40', undefined, pidA);
+    assert(items.status === 200 && items.json.items.length > 10, 'the item shop is empty');
+    const ids = items.json.items.slice(0, 8).map((i) => i.id);
+
+    const short = await api('creator/create', { name: 'no', items: ids }, pidA);
+    assert(short.status >= 400 && /10 characters/.test(short.json.error), `short names slipped through: ${JSON.stringify(short.json)}`);
+    const rude = await api('creator/create', { name: 'fucking case', items: ids }, pidA);
+    assert(rude.status >= 400 && /profanit/i.test(rude.json.error), 'profanity filter let one through');
+    const few = await api('creator/create', { name: 'A Perfectly Fine Case', items: ids.slice(0, 3) }, pidA);
+    assert(few.status >= 400 && /at least 6/.test(few.json.error), `thin case slipped through: ${JSON.stringify(few.json)}`);
+    return `blocked: "${short.json.error}" / "${few.json.error}"`;
+  });
+
+  await check('creator: a published case prices honestly and pays its maker on every open', async () => {
+    const a = await api('hello', { name: 'MakerB' });
+    const aJson = a.json; a.pid = aJson.pid;
+    const b = await api('hello', { name: 'OpenerB' });
+    b.pid = b.json.pid;
+    const shop = await api('items?q=&limit=120', undefined, a.pid);
+    const picks = shop.json.items.filter((i) => i.base > 5 && i.base < 600).slice(0, 9);
+    assert(picks.length >= 8, 'not enough mid-tier items to build from');
+    for (const shape of ['house', 'player', 'creator']) {
+      const made = await api('creator/create', { name: `Honest Case ${shape}`, items: picks.map((i) => i.id), shape }, a.pid);
+      assert(made.status === 200, `create failed: ${JSON.stringify(made.json)}`);
+      const c = made.json.case;
+      assert(c.returnRate <= 1.02 && c.returnRate >= 0.78, `${shape} prices to ${(c.returnRate * 100).toFixed(0)}% back`);
+      const dup = await api('creator/create', { name: `Honest Case ${shape}`, items: picks.map((i) => i.id), shape }, a.pid);
+      assert(dup.status >= 400 && /already taken/.test(dup.json.error), 'duplicate names are allowed');
+      await api('creator/delete', { id: c.id }, a.pid);
+    }
+    // the one we keep: open it as someone else and watch the commission move
+    const made = await api('creator/create', { name: 'Commission Watch', items: picks.map((i) => i.id), shape: 'house' }, a.pid);
+    const caseId = made.json.case.id;
+    const before = (await api('creator', undefined, a.pid)).json.mine.find((c) => c.id === caseId);
+    const ownerBefore = (await api('state', undefined, a.pid)).json.you.balance;
+    const opened = await api('case/open', { caseId, count: 1 }, b.pid);
+    assert(opened.status === 200, 'the community case would not open');
+    const expectCut = Math.round(made.json.case.gems * 0.05);
+    assert(opened.json.creatorCut === expectCut, `cut was ${opened.json.creatorCut}, expected ${expectCut}`);
+    const after = (await api('creator', undefined, a.pid)).json.mine.find((c) => c.id === caseId);
+    assert(after.opens === before.opens + 1 && after.earned === before.earned + expectCut, 'the creator was not credited');
+    const ownerAfter = (await api('state', undefined, a.pid)).json.you.balance;
+    assert(Math.abs((ownerAfter - ownerBefore) - expectCut) < 1, `creator balance moved ${ownerAfter - ownerBefore}, expected ${expectCut}`);
+    // a fresh session must see it on the shelf, tagged community
+    const cfg = await api('config');
+    const listed = cfg.json.cases.find((c) => c.id === caseId);
+    assert(listed && listed.origin === 'community' && listed.creator && listed.creator.name === 'MakerB', 'the case is not on the public shelf');
+    // and the maker can take it down again
+    const gone = await api('creator/delete', { id: caseId }, a.pid);
+    assert(gone.status === 200, 'delete failed');
+    const cfg2 = await api('config');
+    assert(!cfg2.json.cases.some((c) => c.id === caseId), 'the deleted case is still on the shelf');
+    return `"Commission Watch" 💎 ${made.json.case.gems} · ${(made.json.case.returnRate * 100).toFixed(0)}% back · creator +💎 ${expectCut} on open · removed again`;
+  });
+
+  await check('creator: someone else cannot delete your case', async () => {
+    const a = await api('hello', { name: 'MakerC' });
+    a.pid = a.json.pid;
+    const b = await api('hello', { name: 'ThiefC' });
+    b.pid = b.json.pid;
+    const shop = await api('items?q=&limit=40', undefined, a.pid);
+    const picks = shop.json.items.slice(0, 7).map((i) => i.id);
+    const made = await api('creator/create', { name: 'Ownership Case', items: picks }, a.pid);
+    assert(made.status === 200, `create failed: ${JSON.stringify(made.json)}`);
+    const theft = await api('creator/delete', { id: made.json.case.id }, b.pid);
+    assert(theft.status >= 400 && /belongs to someone else/.test(theft.json.error), 'another session deleted a case it does not own');
+    await api('creator/delete', { id: made.json.case.id }, a.pid);
+    return 'delete is owner-only';
+  });
+
+  await check('creator: the caps on items and on cases are enforced', async () => {
+    const a = await api('hello', { name: 'MakerD' });
+    a.pid = a.json.pid;
+    const shop = await api('items?q=&limit=120', undefined, a.pid);
+    const tooMany = await api('creator/create', { name: 'Greedy Case Of Items', items: shop.json.items.slice(0, 30).map((i) => i.id) }, a.pid);
+    assert(tooMany.status === 200, 'a 30-item pick should quietly trim to 20, not fail');
+    const cfg = await api('case?id=' + tooMany.json.case.id);
+    assert(cfg.json.contents.length <= 20, `case carries ${cfg.json.contents.length} items`);
+    const made = [];
+    for (let i = 0; i < 3; i++) {
+      const r = await api('creator/create', { name: `Cap Test Case Number ${i}`, items: shop.json.items.slice(0, 7).map((x) => x.id) }, a.pid);
+      if (r.status === 200) made.push(r.json.case.id);
+    }
+    const fourth = await api('creator/create', { name: 'Cap Test Case Number 9', items: shop.json.items.slice(0, 7).map((x) => x.id) }, a.pid);
+    assert(fourth.status >= 400 && /up to 3/.test(fourth.json.error), `the 4th case was allowed: ${JSON.stringify(fourth.json)}`);
+    for (const id of made) await api('creator/delete', { id }, a.pid);
+    return `trimmed a 30-item pick to ${cfg.json.contents.length}; 4th case refused`;
   });
 }
 

@@ -8,6 +8,7 @@
 'use strict';
 
 const catalog = require('./catalog');
+const creatorLib = require('./creator');
 const W = require('./world');
 
 const {
@@ -64,11 +65,42 @@ function actionCaseOpen(p, body) {
       }
     }
   }
+  // a community case pays its creator a commission out of the entry fee
+  const creator = catalog.getCase(def.id).creator;
+  let creatorCut = 0;
+  if (creator && !useVoucher) {
+    creatorCut = creatorLib.payCreator(def.id, count);
+    const owner = W.world.players.get(creator.id);
+    if (owner && creatorCut > 0) {
+      owner.balance += creatorCut;                       // fake gems, moved not printed
+      owner.stats.creatorEarned = (owner.stats.creatorEarned || 0) + creatorCut;
+      owner.stats.creatorOpens = (owner.stats.creatorOpens || 0) + count;
+    }
+  }
   const spent = useVoucher ? 0 : cost;
   p.netToday += returned - spent;
   if (returned - spent > p.stats.biggestWin) p.stats.biggestWin = Math.round(returned - spent);
   scheduleSave();
-  return ok({ items, cost: spent, refund: returned, voucherUsed: useVoucher, you: publicPlayer(p) });
+  return ok({ items, cost: spent, refund: returned, voucherUsed: useVoucher, creatorCut, you: publicPlayer(p) });
+}
+
+/* ------------------------------------------------------------- case creator */
+
+function actionCreatorCreate(p, body) {
+  const res = creatorLib.create(p, body);
+  if (res.error) return err(res.error);
+  pushFeed({
+    type: 'Creator', name: p.name, isBot: false, you: true, hue: p.hue, face: p.face,
+    detail: `published "${res.case.name}" — 💎 ${res.case.gems} a case, earns 💎 ${res.case.commission} per open`,
+    value: res.case.gems, profit: 0, stake: 0,
+  });
+  return ok(res);
+}
+
+function actionCreatorDelete(p, body) {
+  const res = creatorLib.remove(p, String(body.id || ''));
+  if (res.error) return err(res.error);
+  return ok(res);
 }
 
 function actionSell(p, body) {
@@ -558,6 +590,8 @@ const ACTIONS = {
   'plinko/drop': actionPlinko,
   'upgrader/spin': actionUpgrade,
   'champion/join': actionChampionJoin,
+  'creator/create': actionCreatorCreate,
+  'creator/delete': actionCreatorDelete,
   'bonus': actionBonus,
   'rewards/free-cases': actionClaimFreeCases,
   'rename': actionRename,

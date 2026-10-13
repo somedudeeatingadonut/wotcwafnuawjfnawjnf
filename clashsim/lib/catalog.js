@@ -19,8 +19,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
+const creator = require('./creator');
+
 const CATALOG_PATH = path.join(__dirname, '..', 'public', 'catalog.json');
+const CLASH_PACK_PATH = path.join(__dirname, '..', 'public', 'catalog-clash.json');
 const RAW = JSON.parse(fs.readFileSync(CATALOG_PATH, 'utf8'));
+
+/** The clash pack shipped alongside the originals: the real site's classics and
+ *  its own cases (public/catalog-clash.json, built by tools/build-clash-catalog.js). */
+const CLASH_PACK = (() => {
+  try { return JSON.parse(fs.readFileSync(CLASH_PACK_PATH, 'utf8')); } catch { return { cases: [] }; }
+})();
 
 const WEARS = RAW.wears || [];
 const STATTRAK = RAW.stattrak || { chance: 0.1, mult: 1.5 };
@@ -90,10 +99,28 @@ function rollItem(caseId) {
   return instantiate(def.items[def.items.length - 1], def.id);
 }
 
-const CASE_INDEX = new Map(RAW.cases.map((c) => [c.id, c]));
 const RARITY_ORDER = ['rarespecial', 'rarity_ancient', 'rarity_legendary', 'rarity_mythical', 'rarity_rare'];
 
-function getCase(id) { return CASE_INDEX.get(id) || null; }
+/* Every case the sim ships: the originals, the clash pack, then whatever players
+ * have published in the Case Creator. Community cases change at runtime, so the
+ * merged view is rebuilt whenever the creator's revision moves. */
+let mergedCache = null;
+let mergedRevision = -1;
+function allCases() {
+  const rev = creator.revisionOf();
+  if (mergedCache && mergedRevision === rev) return mergedCache;
+  mergedCache = RAW.cases.concat(CLASH_PACK.cases || [], creator.cases());
+  mergedRevision = rev;
+  return mergedCache;
+}
+
+const caseIndex = () => {
+  const index = new Map();
+  for (const c of allCases()) index.set(c.id, c);
+  return index;
+};
+
+function getCase(id) { return caseIndex().get(id) || null; }
 
 /** Aggregate a case's per-item odds up to rarity level — this is what the UI shows. */
 function rarityOdds(caseDef) {
@@ -129,6 +156,8 @@ function publicCase(caseDef) {
     origin: caseDef.origin,
     image: caseDef.image,
     itemCount: caseDef.items.length,
+    creator: caseDef.creator || null,
+    returnRate: caseDef.returnRate || 0.9,
     odds: rarityOdds(caseDef),
     contents: caseDef.items
       .slice()
@@ -146,6 +175,26 @@ function caseEv(caseDef) {
   const wearEv = WEARS.reduce((s, w) => s + w.chance * (w.mult ?? 1), 0) || 1;
   const stEv = 1 + STATTRAK.chance * (STATTRAK.mult - 1);
   return Math.round(ev * wearEv * stEv);
+}
+
+/** Every item the sim knows about — the Case Creator's shop of parts. */
+function itemUniverse() {
+  const seen = new Map();
+  for (const c of allCases()) {
+    for (const it of c.items) {
+      const entry = {
+        id: it.id, name: it.name, weapon: it.weapon, pattern: it.pattern,
+        rarity: it.rarity, base: it.base, image: it.image || null, seed: it.seed || 0,
+      };
+      // the priciest listing wins, so a knife keeps the value of its best case
+      if (!seen.has(it.name) || seen.get(it.name).base < entry.base) seen.set(it.name, entry);
+    }
+  }
+  for (const p of RAW.pool || []) {
+    const entry = { id: p.id, name: p.name, weapon: p.weapon || '', pattern: p.pattern || '', rarity: p.rarity, base: p.base, image: p.image || null, seed: p.seed || 0 };
+    if (!seen.has(p.name) || seen.get(p.name).base < entry.base) seen.set(p.name, entry);
+  }
+  return [...seen.values()].sort((a, b) => a.base - b.base);
 }
 
 /** A high-tier item from the pool — used as the upgrader's "win" target. */
@@ -171,10 +220,11 @@ function poolItemNear(targetValue) {
   return instantiate(best, null);
 }
 
-module.exports = {
+const exported = {
   RAW,
   rarities: RAW.rarities,
-  cases: RAW.cases,
+  allCases,
+  itemUniverse,
   pool: RAW.pool || [],
   wearTable: WEARS,
   stattrak: STATTRAK,
@@ -189,3 +239,8 @@ module.exports = {
   RARITY_ORDER,
   FLOAT_BANDS,
 };
+
+/* `cases` stays the simple name callers already use — now the merged view. */
+Object.defineProperty(exported, 'cases', { get: allCases, enumerable: true });
+
+module.exports = exported;
