@@ -24,7 +24,7 @@ Zero dependencies — Node 18+ and nothing else (`node:http`, `node:fs`,
 
 ```bash
 PORT=8080 HOST=127.0.0.1 node server.js   # bind somewhere else
-npm run smoke                             # 92 checks, spawns its own scratch server
+npm run smoke                             # 142 checks, spawns its own scratch server
 node tools/smoke.js http://localhost:3000 # or test a server that is already running
 
 npm run test:reel                         # drives a real Chromium and watches the reel move
@@ -56,7 +56,8 @@ exits 0 rather than failing a machine that cannot run a browser.
 
 | Game | How it works | House edge |
 | --- | --- | --- |
-| **Case Opening** | Real CS2 cases, real items, real rarity ladders. Each drop rolls a float (wear band) and a 10% StatTrak™ chance, both of which scale the value. | items return ~90% of the case price, by construction |
+| **Case Opening** | 106 cases on one shelf: all 41 real Valve weapon cases, the clash pack (the site's own cases — 10% Knife, Knife 50 50, Knives Out, AWP Main, Glove Flip, Holo King, the Level cases … — plus 8 clash classics, all on the dump's real covers), 12 community cases, 3 sticker capsules and 2 Clash originals. Each drop rolls a float (wear band) and a 10% StatTrak™ chance, both of which scale the value. | items return ~90% of the case price, by construction |
+| **Case Creator** | The real flow: a name (unused, 10–28 chars, no profanities), cover art from the dump's shelf, up to 20 items with drop chances, and three labelled price points (97% / 90% / 82% back). Publishing merges the case into the shelf for everyone and pays its maker 5% of every open — in fake gems, out of the fake entry fee. | your choice of the three price points |
 | **Case Battles** | 2–4 seats (you plus bots), same case and count for everyone, and the five modes the real site runs: **Normal** (highest total), **Crazy** (lowest total), **Jackpot** (odds by value unboxed), **Terminal** (best item on the last case), **Group** (pot split by all players). Winners take the piles as items, not gems. | emerges from the case return |
 | **Crash** | Multiplier climbs from 1.00× until it busts. 1% of rounds bust instantly at 1.00×; auto-cash-out is handled server-side, so it fires even if you switch tabs. | ~1%, ≈50% of rounds die before 2.00× |
 | **Double** | 54-segment wheel: 24 green and 24 red pay 2×, 6 gold pay 8×. Plus the **Triple Green Bonus** from the real site: 0.75% of every bet feeds a side pot, and three greens in a row pays it out to everyone on green, split by stake. | ≈11% per colour |
@@ -86,6 +87,9 @@ price   = round(EV ÷ 0.9 ÷ 5) × 5               (so the case returns ~90%)
 - **Valve cases** (41 of them — every real weapon case) keep the published
   ladder: Mil-Spec 79.92% · Restricted 15.98% · Classified 3.20% · Covert 0.64% ·
   Rare Special ★ 0.26%.
+- **The clash pack** (48 cases) is the site's own shelf out of the bundle's
+  curated lists — a case named 10% Knife really drops a star in 10% of opens,
+  and the 8 clash classics carry their real contents.
 - **Community cases** (12, with the real community covers from the clash.gg
   dump) use the creator-case spread: 62% / 24% / 10% / 3% / 1%, with themed
   item pools.
@@ -112,21 +116,25 @@ clashsim/
   lib/world.js           bots, chat/feed, round engines (crash · double · champion · race),
                          XP/levels, freebies, persistence, the boot-time lobby warm-up
   lib/games.js           every action a human can take (the API surface)
-  public/index.html      the whole UI: nav, 15 views, modals, toasts
+  lib/creator.js         the Case Creator store: publish, commission, honour roll
+  public/index.html      the whole UI: nav, 16 views, modals, toasts
   public/styles.css      dark/violet theme, responsive, reduced-motion aware
   public/core.js         session, polling with chat/feed deltas, sound, router, inventory
-  public/cases.js        case grid + the measured reel + battles
-  public/core.js         session, sound, feeds · the reel-speed profiles
+  public/cases.js        case grid + the measured reel + battles + the Case Creator
   public/games.js        crash · double · upgrader · mines · plinko · tiles · champion
-  public/catalog.json    generated — 58 cases, 1,519 items (never hand-edit)
+  public/catalog.json    generated shelf — 58 cases, 1,519 items (never hand-edit)
+  public/catalog-clash.json  the site's own cases (10% Knife, Knife 50 50, Knives
+                         Out, …) + 8 clash classics (never hand-edit)
+  public/art/            152 real clash case covers from the dump
   public/art/cases/      12 community case covers pulled from the clash.gg dump
-  tools/build-catalog.js generator + pricing model
+  tools/build-catalog.js generator + pricing model for catalog.json
+  tools/build-clash-catalog.js  generator for the clash pack + its art names
   tools/reel-check.js    real-browser reel/battle animation checks
   tools/smoke.js         the test suite
   reference/             the clash.gg page the layout was matched against, and
                          ZIP_NOTES.md — what is inside the six dump zips at the
                          repo root and how it shaped the sim
-  .data/players.json     gitignored save file
+  .data/players.json     gitignored save file (creators.json lives here too)
 ```
 
 The six zip archives at the **repo root** (`1.zip` … `6.zip`) are the clash.gg

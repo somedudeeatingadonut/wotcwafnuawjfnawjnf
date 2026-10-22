@@ -107,6 +107,12 @@ and live in `clashsim/public/art/cases/`:
 `golden-halo` · `insurgency` · `glove-trade` · `graffiti-chaos` ·
 `golden-katowice` · `jungle-warfare` · `frozen-assault`
 
+152 more covers (`cases_*.webp` → `public/art/case-N.webp`) ship as the clash
+pack's shelf art — the site's own cases (10% Knife, Knife 50 50, Knives Out,
+Color Hunt, Brokie 50 50, AWP Main, Tomb Raid, Eye of the Dragon, Glove Flip,
+Holo King, the Level cases …) in `public/catalog-clash.json`, built by
+`tools/build-clash-catalog.js`, and reused by the Case Creator's art picker.
+
 The real community case *prices and item lists* are not in the dump (they were
 loaded client-side), so the sim's community cases use these covers with
 creator-style odds (62/24/10/3/1) and themed item pools.

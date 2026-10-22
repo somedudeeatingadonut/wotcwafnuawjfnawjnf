@@ -379,6 +379,7 @@ document.addEventListener('pointerdown', () => audio.unlock(), { once: true });
 
 const GAMES = [
   { id: 'cases', ico: '📦', name: 'Case Opening', desc: 'Real CS2 cases, published odds, ×1 to ×5 openings.', meta: '0.26% rare special' },
+  { id: 'creator', ico: '🛠️', name: 'Case Creator', desc: 'Build a case from up to 20 items, price it, earn on every open.', meta: '5% commission' },
   { id: 'battles', ico: '⚔️', name: 'Battles', desc: 'Same case, same openings — five modes, 2 to 4 seats, all bots.', meta: '5 modes' },
   { id: 'crash', ico: '📈', name: 'Crash', desc: 'Climb the multiplier and cash out before it busts.', meta: '1% instant bust' },
   { id: 'double', ico: '🎡', name: 'Double', desc: '54 segments: 24 green, 24 red, 6 gold. Triple Green Bonus pot.', meta: '2× / 2× / 8×' },

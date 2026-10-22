@@ -19,8 +19,30 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
+const creator = require('./creator');
+
 const CATALOG_PATH = path.join(__dirname, '..', 'public', 'catalog.json');
+const CLASH_PACK_PATH = path.join(__dirname, '..', 'public', 'catalog-clash.json');
 const RAW = JSON.parse(fs.readFileSync(CATALOG_PATH, 'utf8'));
+
+/** The clash pack: the real site's own cases (10% Knife, Knife 50 50, Knives
+ *  Out, …) and its Valve classics, with covers pulled out of the dump — built
+ *  by tools/build-clash-catalog.js into public/catalog-clash.json. Normalised
+ *  into the same shape as catalog.json so one loader serves them all. */
+const CLASH_PACK = (() => {
+  try {
+    const pack = JSON.parse(fs.readFileSync(CLASH_PACK_PATH, 'utf8'));
+    pack.cases = (pack.cases || []).map((c) => ({
+      ...c,
+      kind: 'clash',
+      style: 'weapon',
+      art: c.art || c.image || null,
+    }));
+    return pack;
+  } catch {
+    return { cases: [] };
+  }
+})();
 
 const WEARS = RAW.wears || [];
 const STATTRAK = RAW.stattrak || { chance: 0.1, mult: 1.5 };
@@ -113,10 +135,50 @@ function rollItem(caseId) {
   return instantiate(def.items[def.items.length - 1], def.id);
 }
 
-const CASE_INDEX = new Map(RAW.cases.map((c) => [c.id, c]));
 const RARITY_ORDER = ['rarespecial', 'rarity_ancient', 'rarity_legendary', 'rarity_mythical', 'rarity_rare'];
 
-function getCase(id) { return CASE_INDEX.get(id) || null; }
+/* Every case the sim ships: the generated shelf, the clash pack, then whatever
+ * players have published in the Case Creator. Community cases change at
+ * runtime, so the merged view is rebuilt when the creator's revision moves. */
+let mergedCache = null;
+let mergedRevision = -1;
+function allCases() {
+  const rev = creator.revisionOf();
+  if (mergedCache && mergedRevision === rev) return mergedCache;
+  mergedCache = RAW.cases.concat(
+    CLASH_PACK.cases,
+    creator.cases().map((c) => ({ ...c, kind: 'community', style: 'weapon', art: c.art || c.image || null })),
+  );
+  mergedRevision = rev;
+  return mergedCache;
+}
+
+function caseIndex() {
+  const index = new Map();
+  for (const c of allCases()) index.set(c.id, c);
+  return index;
+}
+
+function getCase(id) { return caseIndex().get(id) || null; }
+
+/** The item universe the Case Creator may build cases out of: every distinct
+ *  item on the shelf (the priciest listing wins) plus the upgrader pool. */
+function itemUniverse() {
+  const seen = new Map();
+  for (const c of allCases()) {
+    for (const it of c.items) {
+      const entry = {
+        id: it.id, name: it.name, weapon: it.weapon, pattern: it.pattern,
+        rarity: it.rarity, base: it.base, image: it.image || null, seed: it.seed || 0,
+      };
+      if (!seen.has(it.name) || seen.get(it.name).base < entry.base) seen.set(it.name, entry);
+    }
+  }
+  for (const p of RAW.pool || []) {
+    if (!seen.has(p.name) || seen.get(p.name).base < p.base) seen.set(p.name, p);
+  }
+  return [...seen.values()];
+}
 
 /** Aggregate a case's per-item odds up to rarity level — this is what the UI shows. */
 function rarityOdds(caseDef) {
@@ -150,10 +212,12 @@ function publicCase(caseDef) {
     gems: caseDef.gems,
     tag: caseDef.tag,
     origin: caseDef.origin,
+    slug: caseDef.slug,
     kind: caseDef.kind || 'valve',
     style: caseDef.style || 'weapon',
     art: caseDef.art || null,
     image: caseDef.image,
+    creator: caseDef.creator || null,
     itemCount: caseDef.items.length,
     odds: rarityOdds(caseDef),
     contents: caseDef.items
@@ -202,7 +266,10 @@ function poolItemNear(targetValue) {
 module.exports = {
   RAW,
   rarities: RAW.rarities,
-  cases: RAW.cases,
+  get cases() { return allCases(); },
+  allCases,
+  clashPack: CLASH_PACK,
+  itemUniverse,
   pool: RAW.pool || [],
   wearTable: WEARS,
   stattrak: STATTRAK,

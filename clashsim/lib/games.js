@@ -8,6 +8,7 @@
 'use strict';
 
 const catalog = require('./catalog');
+const creatorLib = require('./creator');
 const W = require('./world');
 
 const {
@@ -65,11 +66,42 @@ function actionCaseOpen(p, body) {
       }
     }
   }
+  // a community case pays its creator a commission out of the entry fee
+  const caseCreator = def.creator;
+  let creatorCut = 0;
+  if (caseCreator && !useVoucher) {
+    creatorCut = creatorLib.payCreator(def.id, count);
+    const owner = world.players.get(caseCreator.id);
+    if (owner && creatorCut > 0) {
+      owner.balance += creatorCut;                       // fake gems, moved not printed
+      owner.stats.creatorEarned = (owner.stats.creatorEarned || 0) + creatorCut;
+      owner.stats.creatorOpens = (owner.stats.creatorOpens || 0) + count;
+    }
+  }
   const spent = useVoucher ? 0 : cost;
   p.netToday += returned - spent;
   if (returned - spent > p.stats.biggestWin) p.stats.biggestWin = Math.round(returned - spent);
   scheduleSave();
-  return ok({ items, cost: spent, refund: returned, voucherUsed: useVoucher, you: publicPlayer(p) });
+  return ok({ items, cost: spent, refund: returned, voucherUsed: useVoucher, creatorCut, you: publicPlayer(p) });
+}
+
+/* ------------------------------------------------------------- case creator */
+
+function actionCreatorCreate(p, body) {
+  const res = creatorLib.create(p, body);
+  if (res.error) return err(res.error);
+  pushFeed({
+    type: 'Creator', name: p.name, isBot: false, you: true, hue: p.hue, face: p.face,
+    detail: `published "${res.case.name}" — 💎 ${res.case.gems} a case, earns 💎 ${res.case.commission} per open`,
+    value: res.case.gems, profit: 0, stake: 0,
+  });
+  return ok(res);
+}
+
+function actionCreatorDelete(p, body) {
+  const res = creatorLib.remove(p, String(body.id || ''));
+  if (res.error) return err(res.error);
+  return ok(res);
 }
 
 function actionSell(p, body) {
@@ -614,6 +646,8 @@ function actionReset(p) {
 
 const ACTIONS = {
   'case/open': actionCaseOpen,
+  'creator/create': actionCreatorCreate,
+  'creator/delete': actionCreatorDelete,
   'inventory/sell': actionSell,
   'inventory/sellall': actionSellAll,
   'battle/start': actionBattleStart,
